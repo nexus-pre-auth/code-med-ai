@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAF Simulator — CodeMed Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--blue:#2563EB;--blue-glow:#3B82F6;--cyan:#06B6D4;--green:#10B981;--red:#EF4444;--yellow:#F59E0B;--purple:#8B5CF6;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.3;pointer-events:none}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;z-index:10;position:fixed;top:0;bottom:0}
+.logo{padding:24px 20px;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+.nav{padding:16px 12px;flex:1;overflow-y:auto}
+.nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(139,92,246,.12);color:var(--purple);border-left:2px solid var(--purple)}
+.nav-icon{width:16px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.status-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;box-shadow:0 0 6px var(--green)}
+.status-text{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.main{margin-left:220px;flex:1;z-index:1}
+.topbar{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(6,8,13,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:5}
+.page-title{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.page-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.content{padding:32px;max-width:1100px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.card-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600;letter-spacing:-.2px}
+.card-body{padding:22px}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:14px;border-radius:7px;padding:10px 14px;width:100%;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--purple)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+select option{background:var(--surface2)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:7px;font-family:var(--font);font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
+.btn-purple{background:var(--purple);color:#fff}
+.btn-purple:hover{box-shadow:0 0 24px rgba(139,92,246,.4);opacity:.95}
+.btn-ghost{background:transparent;color:var(--subtle);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.form-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px}
+.form-label{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.spinner{width:18px;height:18px;border:2px solid rgba(139,92,246,.3);border-top-color:var(--purple);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* RAF score display */
+.raf-score-card{background:linear-gradient(135deg,rgba(139,92,246,.1),rgba(6,182,212,.05));border:1px solid rgba(139,92,246,.3);border-radius:12px;padding:28px;text-align:center;margin-bottom:20px}
+.raf-score-main{font-family:var(--mono);font-size:52px;font-weight:700;color:var(--purple);letter-spacing:-2px;line-height:1}
+.raf-score-label{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:6px;text-transform:uppercase;letter-spacing:.08em}
+.raf-score-adj{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--cyan);margin-top:12px}
+.raf-score-adj-label{font-size:11px;color:var(--muted);font-family:var(--mono)}
+/* Stat grid */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;text-align:center}
+.stat-val{font-size:22px;font-weight:700;font-family:var(--mono);margin-bottom:2px}
+.stat-label{font-size:11px;color:var(--muted);font-family:var(--mono)}
+/* HCC breakdown */
+.hcc-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(30,36,53,.6);font-size:13px}
+.hcc-row:last-child{border-bottom:none}
+.hcc-row.suppressed{opacity:.45}
+.hcc-num{font-family:var(--mono);font-weight:700;color:var(--cyan);width:60px;flex-shrink:0}
+.hcc-desc{flex:1;color:var(--subtle)}
+.hcc-raf{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);width:60px;text-align:right;flex-shrink:0}
+.suppressed-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.2);font-family:var(--mono);flex-shrink:0}
+.interaction-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(245,158,11,.04);border-bottom:1px solid rgba(30,36,53,.6);font-size:13px}
+.interaction-row:last-child{border-bottom:none}
+.interaction-pair{font-family:var(--mono);font-weight:600;color:var(--yellow)}
+.interaction-desc{flex:1;color:var(--subtle);font-size:12px}
+.interaction-raf{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--yellow);flex-shrink:0}
+/* Formula breakdown */
+.formula-box{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:var(--mono);font-size:13px;color:var(--subtle);margin-top:16px;line-height:1.8}
+.formula-box .hl{color:var(--purple)}
+.formula-box .hl-cyan{color:var(--cyan)}
+/* Quick presets */
+.preset-chip{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 10px;font-family:var(--mono);font-size:11px;color:var(--subtle);cursor:pointer;margin:3px;transition:all .15s}
+.preset-chip:hover{border-color:var(--purple);color:var(--purple);background:rgba(139,92,246,.08)}
+/* Warning banner */
+.warn-banner{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--yellow);margin-bottom:16px;display:flex;gap:10px;align-items:flex-start}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">CMG</div>
+      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.2 · HIPAA Compliant</div></div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Platform</div>
+    <a href="/" class="nav-item"><span class="nav-icon">⬡</span>Dashboard</a>
+    <a href="/chat" class="nav-item"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
+    <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
+    <a href="/appeals" class="nav-item"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Risk Adjustment</div>
+    <a href="/raf" class="nav-item active"><span class="nav-icon">◎</span>RAF Simulator</a>
+    <a href="/radv" class="nav-item"><span class="nav-icon">◈</span>RADV Audit Prep</a>
+    <div class="nav-section">Developer</div>
+    <a href="/docs" class="nav-item"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
+  </div>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span><span class="status-text">V28 2026 phase-in complete</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title">◎ RAF Score Simulator</div>
+      <div class="page-sub">CY2026 V28 · Hierarchy enforcement · Interaction bonuses · Normalization applied</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="warn-banner">
+      <span>⚠</span>
+      <span>For planning and education only. RAF scores are estimates based on the V28 HCC catalog. Actual CMS payment uses official ICD-10→HCC mapping software. Upgrade only when clinically accurate and documented.</span>
+    </div>
+
+    <!-- Input card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Member Profile &amp; Diagnosis Codes</div>
+        <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">V28 CMS-HCC 2024 model</span>
+      </div>
+      <div class="card-body">
+        <div class="form-label">ICD-10 Codes or V28 HCC Numbers</div>
+        <textarea id="code-input" rows="4" placeholder="ICD-10 or HCC numbers — one per line, comma-separated, or mixed:&#10;&#10;E11.22, I50.22, N18.4, G30.9&#10;HCC 37, HCC 222&#10;B20, I70.213"></textarea>
+        <div style="margin-top:10px;margin-bottom:4px;font-size:12px;color:var(--muted)">Quick presets:</div>
+        <div>
+          <span class="preset-chip" onclick="loadPreset('dm_hf')">DM + HF combo</span>
+          <span class="preset-chip" onclick="loadPreset('ckd_dm')">CKD5 + Diabetes</span>
+          <span class="preset-chip" onclick="loadPreset('hiv_aids')">HIV/AIDS</span>
+          <span class="preset-chip" onclick="loadPreset('schiz')">Schizophrenia</span>
+          <span class="preset-chip" onclick="loadPreset('als_neuro')">ALS + Neuro</span>
+          <span class="preset-chip" onclick="loadPreset('hierarchy_test')">Hierarchy test (HF)</span>
+        </div>
+        <div class="form-row">
+          <div>
+            <div class="form-label">Age</div>
+            <input type="number" id="age-input" value="72" min="0" max="120">
+          </div>
+          <div>
+            <div class="form-label">Sex</div>
+            <select id="sex-input">
+              <option value="F">Female</option>
+              <option value="M">Male</option>
+            </select>
+          </div>
+          <div>
+            <div class="form-label">Plan Type</div>
+            <select id="plan-input">
+              <option value="non_pace">Non-PACE MA (100% V28)</option>
+              <option value="pace">PACE (10% V28 + 90% V22)</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn btn-purple" onclick="runSimulation()" style="flex:1">▶ Run RAF Simulation</button>
+          <button class="btn btn-ghost" onclick="clearAll()">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="result-area" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const PRESETS = {
+  dm_hf:          'E11.22\nI50.22\nI50.9',
+  ckd_dm:         'E11.22\nN18.5\nI12.9',
+  hiv_aids:       'B20\nB18.1',
+  schiz:          'F20.9\nF19.20',
+  als_neuro:      'G12.21\nG30.0\nG40.909',
+  hierarchy_test: 'I50.23\nI50.9\nI50.22',
+};
+
+function loadPreset(key) {
+  document.getElementById('code-input').value = PRESETS[key] || '';
+}
+
+function clearAll() {
+  document.getElementById('code-input').value = '';
+  document.getElementById('age-input').value = '72';
+  document.getElementById('sex-input').value = 'F';
+  document.getElementById('plan-input').value = 'non_pace';
+  document.getElementById('result-area').style.display = 'none';
+}
+
+async function runSimulation() {
+  const raw     = document.getElementById('code-input').value.trim();
+  const age     = parseInt(document.getElementById('age-input').value) || 70;
+  const sex     = document.getElementById('sex-input').value;
+  const plan    = document.getElementById('plan-input').value;
+
+  if (!raw) return;
+
+  // Parse: split by newline/comma/space
+  const tokens = raw.split(/[\n,\s]+/).map(t => t.trim()).filter(Boolean);
+
+  // Separate ICD-10 vs HCC numbers
+  const icd10 = [];
+  const hccs  = [];
+  for (const t of tokens) {
+    const hccMatch = t.match(/^HCC\s*(\d+)$/i);
+    if (hccMatch) {
+      hccs.push(parseInt(hccMatch[1]));
+    } else if (/^[A-Z]\d{2}/i.test(t)) {
+      icd10.push(t.toUpperCase());
+    } else if (/^\d+$/.test(t)) {
+      hccs.push(parseInt(t));
+    }
+  }
+
+  const area = document.getElementById('result-area');
+  area.style.display = 'block';
+  area.innerHTML = '<div style="display:flex;justify-content:center;padding:48px"><div class="spinner"></div></div>';
+
+  try {
+    const payload = { age, sex, plan_type: plan };
+    if (icd10.length) payload.icd10_codes = icd10;
+    if (hccs.length)  payload.hcc_numbers = hccs;
+
+    const r = await fetch('/portal/v28/simulate-raf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+
+    if (d.error) {
+      area.innerHTML = `<div style="color:var(--red);padding:20px;font-family:var(--mono);font-size:13px">⚠ ${d.error}</div>`;
+      return;
+    }
+
+    renderResult(d, plan, age, sex);
+  } catch(e) {
+    area.innerHTML = `<div style="color:var(--red);padding:20px">Error: ${e.message}</div>`;
+  }
+}
+
+function renderResult(d, plan, age, sex) {
+  const area = document.getElementById('result-area');
+
+  // Summary stats
+  const suppressedCount = (d.suppressed_hccs || []).length;
+  const interactionBonus = (d.interaction_raf || 0).toFixed(4);
+  const normFactor = d.normalization_factor || 1.067;
+  const planLabel  = plan === 'pace' ? 'PACE (10% V28 + 90% V22)' : 'Non-PACE MA (100% V28)';
+
+  // HCC rows — kept
+  const keptRows = (d.hcc_details || []).map(h => `
+    <div class="hcc-row">
+      <div class="hcc-num">HCC ${h.hcc}</div>
+      <div class="hcc-desc">${h.desc || 'Unknown category'}</div>
+      <div class="hcc-raf">+${(h.raf_weight || 0).toFixed(4)}</div>
+    </div>`).join('');
+
+  // HCC rows — suppressed
+  const suppRows = (d.suppressed_hccs || []).map(s => `
+    <div class="hcc-row suppressed">
+      <div class="hcc-num">HCC ${s.hcc || s}</div>
+      <div class="hcc-desc" style="color:var(--muted)">${s.desc || 'Suppressed by hierarchy rule'}</div>
+      <div class="hcc-raf" style="color:var(--muted)">0.0000</div>
+      <span class="suppressed-badge">SUPPRESSED</span>
+    </div>`).join('');
+
+  // Interaction rows
+  const interactionRows = (d.interactions || []).map(i => `
+    <div class="interaction-row">
+      <div class="interaction-pair">HCC ${i.hcc1} × HCC ${i.hcc2}</div>
+      <div class="interaction-desc">${i.description || 'Comorbidity interaction bonus'}</div>
+      <div class="interaction-raf">+${(i.raf || 0).toFixed(4)}</div>
+    </div>`).join('');
+
+  const demoRaf = d.demographic_raf || 0;
+  const hccRaf  = d.hcc_raf || 0;
+  const intRaf  = d.interaction_raf || 0;
+  const totalRaf = d.total_raf || 0;
+  const adjRaf   = d.adjusted_raf || 0;
+
+  area.innerHTML = `
+    <!-- Main score -->
+    <div class="raf-score-card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center">
+        <div>
+          <div class="raf-score-label">Total RAF (pre-adjustment)</div>
+          <div class="raf-score-main">${totalRaf.toFixed(4)}</div>
+          <div style="margin-top:8px;font-size:12px;color:var(--muted);font-family:var(--mono)">${planLabel}</div>
+        </div>
+        <div>
+          <div class="raf-score-adj-label">Adjusted RAF (post-normalization &amp; coding adj)</div>
+          <div class="raf-score-adj">${adjRaf.toFixed(4)}</div>
+          <div style="margin-top:4px;font-size:11px;color:var(--muted);font-family:var(--mono)">
+            × ${normFactor} norm · × 0.941 coding adj (5.90%)
+          </div>
+        </div>
+      </div>
+      <div class="formula-box" style="margin-top:20px;text-align:left">
+        <span class="hl">${demoRaf.toFixed(4)}</span> demo
+        + <span class="hl">${hccRaf.toFixed(4)}</span> HCC weights
+        + <span class="hl">${intRaf.toFixed(4)}</span> interactions
+        = <span class="hl">${totalRaf.toFixed(4)}</span> raw RAF
+        × <span class="hl-cyan">${normFactor}</span> norm
+        × <span class="hl-cyan">0.941</span> coding adj
+        = <span class="hl-cyan">${adjRaf.toFixed(4)}</span> adjusted RAF
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--cyan)">${(d.hcc_details||[]).length}</div>
+        <div class="stat-label">HCCs Scoring</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--red)">${suppressedCount}</div>
+        <div class="stat-label">Suppressed (hierarchy)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--yellow)">${(d.interactions||[]).length}</div>
+        <div class="stat-label">Interactions Found</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--purple)">+${intRaf.toFixed(3)}</div>
+        <div class="stat-label">Interaction RAF Bonus</div>
+      </div>
+    </div>
+
+    <!-- HCC Breakdown -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">HCC Scoring Breakdown</div>
+        <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">
+          Age ${age} ${sex === 'F' ? '♀ Female' : '♂ Male'} · Demographic RAF: ${demoRaf.toFixed(4)}
+        </span>
+      </div>
+      ${keptRows || suppRows
+        ? `<div>${keptRows}${suppRows}</div>`
+        : '<div style="padding:20px;color:var(--muted);font-size:13px;text-align:center">No HCCs resolved from input codes</div>'
+      }
+    </div>
+
+    ${interactionRows ? `
+    <!-- Interaction Bonuses -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚡ Disease Interaction Bonuses</div>
+        <span style="font-size:12px;color:var(--yellow);font-family:var(--mono)">Total: +${intRaf.toFixed(4)}</span>
+      </div>
+      <div>${interactionRows}</div>
+    </div>` : ''}
+
+    ${suppressedCount > 0 ? `
+    <!-- Hierarchy note -->
+    <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:14px 18px;font-size:12px;color:var(--red);margin-bottom:20px">
+      <strong>⚑ RADV Risk:</strong> ${suppressedCount} HCC(s) suppressed by V28 hierarchy rules.
+      Billing both parent and child codes is a common RADV audit finding — ensure only the highest-severity code in each hierarchy chain is submitted.
+      <a href="/radv" style="color:var(--red);text-decoration:underline;margin-left:6px">Run RADV Audit Prep →</a>
+    </div>` : ''}
+
+    <!-- ICD-10 input that didn't resolve -->
+    ${d.unresolved_codes && d.unresolved_codes.length ? `
+    <div style="background:rgba(100,116,139,.08);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--muted);margin-bottom:20px;font-family:var(--mono)">
+      Not found in V28: ${d.unresolved_codes.join(', ')} — check code validity or run V28 HCC Checker
+    </div>` : ''}
+  `;
+}
+</script>
+</body>
+</html>

@@ -992,6 +992,159 @@ def portal_v28_batch():
     return jsonify({"total":len(codes),"valid":len(valid),"rejected":len(rejected),
         "not_found":len(codes)-len(valid)-len(rejected),"results":results})
 
+@app.route("/raf")
+def portal_raf():
+    return render_template("raf.html")
+
+@app.route("/radv")
+def portal_radv():
+    return render_template("radv.html")
+
+@app.route("/portal/v28/simulate-raf", methods=["POST"])
+def portal_raf_post():
+    """RAF simulation endpoint for portal UI — no API key required."""
+    try:
+        from v28_hcc_categories import simulate_raf, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available. Run build_seed_db.py first."}), 503
+
+    data        = request.get_json() or {}
+    age         = int(data.get("age", 70))
+    sex         = data.get("sex", "F").upper()
+    plan        = data.get("plan_type", "non_pace")
+    hcc_numbers = list(data.get("hcc_numbers", []))
+    icd_codes   = data.get("icd10_codes", [])
+    unresolved  = []
+
+    if icd_codes:
+        db = get_db()
+        for code in icd_codes[:50]:
+            row = db.execute(
+                "SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+                (code.upper().strip(),)
+            ).fetchone()
+            if row and row["v28_hcc"]:
+                try:
+                    hcc_numbers.append(int(row["v28_hcc"]))
+                except ValueError:
+                    unresolved.append(code)
+            else:
+                unresolved.append(code)
+
+    if not hcc_numbers:
+        return jsonify({"error": "No valid V28 HCC codes resolved from input. Check codes via V28 HCC Checker."}), 400
+
+    hcc_numbers = list(dict.fromkeys(hcc_numbers))
+    sim = simulate_raf(hcc_numbers, age=age, sex=sex)
+
+    norm_factor = 1.067
+    if plan == "pace":
+        norm_factor = round(0.10 * 1.067 + 0.90 * 1.187, 4)
+    adjusted_raf = round(sim["total_raf"] * norm_factor * (1.0 - 0.059), 4)
+
+    # Enrich kept/suppressed with descriptions
+    kept_details = []
+    for hcc in sim.get("kept_hccs", []):
+        cat = V28_HCC_CATEGORIES.get(hcc, {})
+        kept_details.append({
+            "hcc": hcc,
+            "desc": cat.get("desc", ""),
+            "raf_weight": cat.get("raf_weight", 0.0),
+        })
+
+    suppressed_details = []
+    for hcc in sim.get("suppressed_hccs", []):
+        cat = V28_HCC_CATEGORIES.get(hcc, {})
+        suppressed_details.append({
+            "hcc": hcc,
+            "desc": cat.get("desc", "Suppressed by hierarchy rule"),
+        })
+
+    return jsonify({
+        **sim,
+        "hcc_details": kept_details,
+        "suppressed_hccs": suppressed_details,
+        "plan_type": plan,
+        "normalization_factor": norm_factor,
+        "ma_coding_adjustment": 0.059,
+        "adjusted_raf": adjusted_raf,
+        "unresolved_codes": unresolved,
+    })
+
+
+@app.route("/portal/v28/radv-requirements", methods=["POST"])
+def portal_radv_post():
+    """RADV documentation requirements for portal — accepts HCC number or ICD-10 code."""
+    try:
+        from v28_hcc_categories import get_radv_requirements, V28_HCC_CATEGORIES, V28_HIERARCHIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    data  = request.get_json() or {}
+    query = data.get("query", "").strip()
+    if not query:
+        return jsonify({"error": "query required (HCC number or ICD-10 code)"}), 400
+
+    hcc_num = None
+
+    # Try parsing as HCC number
+    if query.isdigit():
+        hcc_num = int(query)
+    else:
+        # Try as ICD-10 — look up v28_hcc from DB
+        db  = get_db()
+        row = db.execute(
+            "SELECT v28_hcc, description FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+            (query.upper(),)
+        ).fetchone()
+        if row and row["v28_hcc"]:
+            try:
+                hcc_num = int(row["v28_hcc"])
+            except ValueError:
+                pass
+        if hcc_num is None:
+            # Maybe it's in format "HCC 37"
+            m = re.match(r'^HCC\s*(\d+)$', query, re.IGNORECASE)
+            if m:
+                hcc_num = int(m.group(1))
+
+    if hcc_num is None:
+        return jsonify({"error": f"Could not resolve '{query}' to a V28 HCC. Try a number (e.g. 37) or valid V28 ICD-10 code."}), 404
+
+    cat = V28_HCC_CATEGORIES.get(hcc_num)
+    if not cat:
+        return jsonify({"error": f"HCC {hcc_num} not found in V28 category catalog (1–115)"}), 404
+
+    reqs = get_radv_requirements(hcc_num)
+
+    # Build hierarchy chain for this HCC
+    hierarchy_chain = []
+    for parent, child, rule_desc in V28_HIERARCHIES:
+        if parent == hcc_num:
+            child_cat = V28_HCC_CATEGORIES.get(child, {})
+            hierarchy_chain.append({"hcc": child, "desc": child_cat.get("desc", ""), "role": "child", "rule": rule_desc})
+        elif child == hcc_num:
+            parent_cat = V28_HCC_CATEGORIES.get(parent, {})
+            hierarchy_chain.append({"hcc": parent, "desc": parent_cat.get("desc", ""), "role": "parent", "rule": rule_desc})
+
+    return jsonify({
+        "hcc": hcc_num,
+        "description": cat["desc"],
+        "family": cat["family"],
+        "severity": cat["severity"],
+        "raf_weight": cat.get("raf_weight"),
+        "hierarchy_group": cat.get("hierarchy_group"),
+        "radv_requirements": reqs,
+        "hierarchy_chain": hierarchy_chain,
+        "encounter_filters": {
+            "face_to_face_required": True,
+            "audio_only_telehealth_excluded": True,
+            "lab_radiology_alone_excluded": True,
+            "data_source": "Encounter data + FFS only (non-PACE MA CY2026)",
+        },
+    })
+
+
 @app.route("/portal/v28/explain", methods=["POST"])
 def portal_v28_explain():
     data = request.get_json() or {}
