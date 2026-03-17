@@ -99,6 +99,15 @@ RAG_SYSTEM = """You are CodeMed AI — a specialized medical billing, prior auth
 
 CORPUS: 1,307+ CMS LCD/NCD policies, payer clinical policies, HIPAA compliance documents, and V28 HCC mappings (2024–2026 Medicare Advantage risk adjustment).
 
+DATA SOURCES & RISK ADJUSTMENT CONTEXT (CY2026):
+- NON-PACE MA PLANS: 100% CMS-HCC V28 (2024 model) — phase-in complete as of CY2026. Only encounter data + FFS claims qualify; RAPS no longer accepted for new diagnoses. MOR/MMR record types: [2024 CMS-HCC V28 M] [2026 RxHCC V08 6] [2023 ESRD V24 L].
+- PACE PLANS: Blended 10% V28 + 90% V22 (2017 model). RAPS still accepted for the V22 portion. MOR/MMR adds: [2017 CMS-HCC V22 K] [2019 ESRD V21 B] [2026 RxHCC V08 6/7]. Flag PACE-specific nuances whenever the user references PACE.
+- ENCOUNTER FILTERING — FACE-TO-FACE REQUIRED: Diagnoses qualify only from face-to-face visits with eligible CPT/HCPCS. **EXCLUDED**: audio-only telehealth (video-enabled DOES qualify), labs alone, radiology/pathology alone, home health/SNF without face-to-face code. **QUALIFYING**: physician E&M, inpatient, outpatient hospital, FQHC/RHC.
+- NORMALIZATION (2026): V28 Part C = 1.067 | PACE V22 Part C = 1.187 | ESRD dialysis V24 = 1.062 | RxHCC MA-PD calibrated 2022/2023 data.
+- FRAILTY: Full 2024 factors for FIDE-SNPs — no phase-in reduction in 2026.
+- MA CODING INTENSITY ADJUSTMENT: 5.90% statutory reduction on all MA risk scores before payment.
+- NET IMPACT 2026: −3.01% avg risk score from V28 + normalization; ~5.06% net MA payment increase after offsets; 9.04% effective growth rate.
+
 RESPONSE RULES:
 1. Cite specific policy IDs in every relevant answer: "Per LCD L38226..." or "Per NCD 280.14..."
 2. Reference exact ICD-10-CM, CPT, and HCPCS codes from the context — never invent codes
@@ -738,6 +747,7 @@ def api_v28_normalization():
                 "cms_hcc_v22_part_c_pace": 1.187,
                 "esrd_dialysis_v24": 1.062,
                 "rxhcc_ma_pd": 1.194,
+                "frailty_fide_snps": "full_2024_factors",
             },
             "ma_coding_intensity_adjustment": 0.059,
             "non_pace_v28_blend": 1.00,
@@ -745,7 +755,24 @@ def api_v28_normalization():
             "pace_v22_blend": 0.90,
             "ma_payment_increase_2026": 0.0506,
             "effective_growth_rate_2026": 0.0904,
-            "note": "Run build_seed_db.py to persist config table",
+            "mor_record_types": {
+                "non_pace": ["2024 CMS-HCC V28 M", "2026 RxHCC V08 6", "2023 ESRD V24 L"],
+                "pace":     ["2024 CMS-HCC V28 M", "2026 RxHCC V08 6/7", "2017 CMS-HCC V22 K",
+                             "2023 ESRD V24 L",    "2019 ESRD V21 B"],
+            },
+            "encounter_excluded": [
+                "audio_only_telehealth",
+                "labs_radiology_pathology_alone",
+                "home_health_snf_without_face_to_face",
+            ],
+            "encounter_accepted": [
+                "physician_office_em",
+                "inpatient_hospital",
+                "outpatient_hospital",
+                "fqhc_rhc",
+                "video_enabled_telehealth",
+            ],
+            "note": "Run build_seed_db.py to persist full config table",
         })
 
     config = {r["config_key"]: r["config_value"] for r in rows}

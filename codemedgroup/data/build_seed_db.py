@@ -765,6 +765,24 @@ def build():
         (2026, "v28_payment_hccs",                  "115",    "Number of payment HCC categories in V28 (vs 86 in V24)", "CMS V28 Model Documentation"),
         (2026, "v28_icd10_mapped_codes",             "7770",   "Approximate number of ICD-10-CM codes mapping to V28 payment HCCs (vs 9,797 in V24)", "CMS V28 Model Documentation"),
         (2026, "v28_icd10_removed_codes",            "2290",   "ICD-10-CM codes removed from HCC mapping in V28 vs V24 transition", "CMS V28 Model Documentation"),
+        # MOR/MMR record types — Non-PACE MA (2026)
+        (2026, "mor_record_type_non_pace_part_c",    "2024 CMS-HCC V28 M",  "Non-PACE Part C MOR/MMR record type identifier for 2026 payment year", "CMS MOR/MMR 2026 Spec"),
+        (2026, "mor_record_type_non_pace_rxhcc",     "2026 RxHCC V08 6",    "Non-PACE Part D RxHCC MOR/MMR record type for 2026", "CMS MOR/MMR 2026 Spec"),
+        (2026, "mor_record_type_non_pace_esrd",      "2023 ESRD V24 L",     "Non-PACE ESRD MOR/MMR record type for 2026", "CMS MOR/MMR 2026 Spec"),
+        # MOR/MMR record types — PACE (2026, blended V28+V22)
+        (2026, "mor_record_type_pace_part_c",        "2024 CMS-HCC V28 M",  "PACE Part C MOR/MMR record type — V28 portion (10% weight)", "CMS MOR/MMR 2026 Spec / PCUG Nov 2025"),
+        (2026, "mor_record_type_pace_rxhcc",         "2026 RxHCC V08 6/7",  "PACE Part D RxHCC MOR/MMR record type — V08 records 6 and 7", "CMS MOR/MMR 2026 Spec / PCUG Nov 2025"),
+        (2026, "mor_record_type_pace_v22",           "2017 CMS-HCC V22 K",  "PACE V22 legacy MOR/MMR record type — 90% weight in 2026 blend", "CMS MOR/MMR 2026 Spec / PCUG Nov 2025"),
+        (2026, "mor_record_type_pace_esrd_v24",      "2023 ESRD V24 L",     "PACE ESRD V24 MOR/MMR record type", "CMS MOR/MMR 2026 Spec"),
+        (2026, "mor_record_type_pace_esrd_v21",      "2019 ESRD V21 B",     "PACE ESRD V21 legacy MOR/MMR record type", "CMS MOR/MMR 2026 Spec"),
+        # Frailty supplemental payment — FIDE-SNPs
+        (2026, "norm_factor_frailty_fide_snps",      "full_2024_factors",   "Frailty supplemental payment uses full 2024 CMS frailty factors for FIDE-SNPs in 2026 — no phase-in reduction", "2026 CMS Final Rate Announcement"),
+        # Encounter data filtering rules — what qualifies for risk adjustment
+        (2026, "encounter_filter_face_to_face_required",   "true",  "Diagnoses must come from face-to-face visits with eligible CPT/HCPCS codes to qualify for risk adjustment", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_excluded_audio_only_telehealth",  "true",  "Audio-only telehealth visits do NOT qualify as face-to-face encounters for risk adjustment (video-enabled telehealth does qualify)", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_excluded_labs_radiology_alone",   "true",  "Laboratory, radiology, and pathology results alone (without face-to-face CPT/HCPCS) do not qualify diagnoses for risk adjustment", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_excluded_home_health_snf_no_f2f", "true",  "Home health agency and SNF claims without an accompanying face-to-face CPT/HCPCS encounter code do not qualify for risk adjustment", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_accepted_sources",         "physician_inpatient_outpatient_facility", "Qualifying face-to-face sources: physician office (E&M), inpatient hospital, outpatient hospital, FQHC/RHC — with eligible CPT/HCPCS", "2026 CMS Encounter Data Guidance"),
     ]
     for config_year, config_key, config_value, description, source in CMS_2026_CONFIG:
         conn.execute("""
