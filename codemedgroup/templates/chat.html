@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CodeMed AI Chat — CodeMed Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--blue:#2563EB;--blue-glow:#3B82F6;--cyan:#06B6D4;--green:#10B981;--red:#EF4444;--yellow:#F59E0B;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);height:100vh;display:flex;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.3;pointer-events:none;z-index:0}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;z-index:10}
+.logo{padding:24px 20px;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+.nav{padding:16px 12px;flex:1}
+.nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(37,99,235,.15);color:var(--blue-glow);border-left:2px solid var(--blue)}
+.nav-icon{width:16px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.status-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;box-shadow:0 0 6px var(--green)}
+.status-text{font-size:11px;color:var(--muted);font-family:var(--mono)}
+
+/* Chat area */
+.chat-container{flex:1;display:flex;flex-direction:column;z-index:1;overflow:hidden}
+.chat-header{padding:20px 28px;border-bottom:1px solid var(--border);background:rgba(6,8,13,.85);backdrop-filter:blur(12px);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.chat-title{font-size:17px;font-weight:600;letter-spacing:-.3px}
+.chat-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.chat-messages{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:20px}
+.chat-messages::-webkit-scrollbar{width:4px}
+.chat-messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* Messages */
+.msg{display:flex;gap:12px;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg-avatar{width:32px;height:32px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.msg-avatar.user{background:rgba(37,99,235,.2);border:1px solid rgba(37,99,235,.3);color:var(--blue-glow)}
+.msg-avatar.ai{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:var(--green)}
+.msg-content{flex:1;max-width:780px}
+.msg-name{font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:6px;font-weight:500}
+.msg-bubble{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;font-size:14px;line-height:1.65;color:var(--text)}
+.msg.user .msg-bubble{background:rgba(37,99,235,.08);border-color:rgba(37,99,235,.25);color:var(--text)}
+.msg-sources{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.source-tag{background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.2);color:var(--cyan);font-size:11px;padding:3px 8px;border-radius:5px;font-family:var(--mono)}
+
+/* Suggested queries */
+.suggestions{display:flex;flex-wrap:wrap;gap:8px;padding:0 28px 16px}
+.suggestion{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:8px 14px;font-size:12.5px;color:var(--subtle);cursor:pointer;transition:all .15s}
+.suggestion:hover{border-color:var(--blue);color:var(--text);background:rgba(37,99,235,.08)}
+
+/* Input */
+.chat-input-area{padding:16px 28px 24px;flex-shrink:0;border-top:1px solid var(--border);background:rgba(6,8,13,.8)}
+.input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;transition:border-color .15s}
+.input-wrap:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+#chat-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:14px;resize:none;max-height:120px;line-height:1.5}
+#chat-input::placeholder{color:var(--muted)}
+.send-btn{width:36px;height:36px;background:var(--blue);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.send-btn:hover{background:#1D4ED8;box-shadow:0 0 16px rgba(37,99,235,.4)}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+.send-btn svg{width:16px;height:16px;fill:white}
+
+/* Typing indicator */
+.typing{display:flex;gap:4px;align-items:center;padding:4px 0}
+.typing-dot{width:6px;height:6px;background:var(--muted);border-radius:50%;animation:typing 1.2s ease-in-out infinite}
+.typing-dot:nth-child(2){animation-delay:.2s}
+.typing-dot:nth-child(3){animation-delay:.4s}
+@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+
+/* Markdown-ish rendering */
+.msg-bubble strong{color:var(--text);font-weight:600}
+.msg-bubble code{background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.2);padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12px;color:var(--cyan)}
+.msg-bubble ul,.msg-bubble ol{margin-left:18px;margin-top:6px;margin-bottom:6px}
+.msg-bubble li{margin-bottom:3px;color:var(--subtle)}
+.msg-bubble li strong{color:var(--text)}
+.msg-bubble p{margin-bottom:8px}
+.msg-bubble p:last-child{margin-bottom:0}
+.msg-bubble h3{font-size:13px;font-weight:600;color:var(--text);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em;color:var(--blue-glow)}
+
+/* Empty state */
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px}
+.empty-icon{font-size:40px;margin-bottom:16px;opacity:.5}
+.empty-title{font-size:18px;font-weight:600;margin-bottom:8px;letter-spacing:-.3px}
+.empty-sub{font-size:13px;color:var(--muted);max-width:360px;line-height:1.6}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">CMG</div>
+      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.0 · HIPAA Compliant</div></div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Platform</div>
+    <a href="/" class="nav-item"><span class="nav-icon">⬡</span>Dashboard</a>
+    <a href="/chat" class="nav-item active"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
+    <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
+    <a href="/appeals" class="nav-item"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Developer</div>
+    <a href="/docs" class="nav-item"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
+  </div>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span><span class="status-text">Claude API connected</span>
+  </div>
+</nav>
+
+<div class="chat-container">
+  <div class="chat-header">
+    <div>
+      <div class="chat-title">◈ CodeMed AI</div>
+      <div class="chat-sub">RAG · 1,300+ CMS Policies · claude-sonnet-4</div>
+    </div>
+    <button onclick="clearChat()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--font);font-size:12px">Clear Chat</button>
+  </div>
+
+  <div class="chat-messages" id="messages">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">◈</div>
+      <div class="empty-title">CodeMed AI</div>
+      <div class="empty-sub">Ask anything about prior authorization criteria, LCD/NCD coverage policies, V28 HCC coding, or denial appeals. Trained on 1,300+ CMS documents.</div>
+    </div>
+  </div>
+
+  <div class="suggestions" id="suggestions">
+    <div class="suggestion" onclick="sendSuggestion(this)">Prior auth criteria for lumbar MRI</div>
+    <div class="suggestion" onclick="sendSuggestion(this)">What ICD-10 codes support cardiac monitoring?</div>
+    <div class="suggestion" onclick="sendSuggestion(this)">CPAP coverage requirements for sleep apnea</div>
+    <div class="suggestion" onclick="sendSuggestion(this)">How to appeal a medical necessity denial</div>
+    <div class="suggestion" onclick="sendSuggestion(this)">Colonoscopy coverage indications</div>
+  </div>
+
+  <div class="chat-input-area">
+    <div class="input-wrap">
+      <textarea id="chat-input" placeholder="Ask about prior auth, coverage criteria, ICD-10 coding, denial appeals..." rows="1"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+let history = [];
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+document.getElementById('chat-input').addEventListener('input', function() { autoResize(this); });
+document.getElementById('chat-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+function sendSuggestion(el) {
+  document.getElementById('chat-input').value = el.textContent;
+  document.getElementById('suggestions').style.display = 'none';
+  sendMessage();
+}
+
+function clearChat() {
+  history = [];
+  document.getElementById('messages').innerHTML = `<div class="empty-state" id="empty-state"><div class="empty-icon">◈</div><div class="empty-title">CodeMed AI</div><div class="empty-sub">Ask anything about prior authorization criteria, LCD/NCD coverage policies, V28 HCC coding, or denial appeals.</div></div>`;
+  document.getElementById('suggestions').style.display = 'flex';
+}
+
+function renderMarkdown(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hul])(.+)$/gm, (m) => m ? m : '')
+    .replace(/\n/g, '<br>');
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const query = input.value.trim();
+  if (!query) return;
+
+  // Hide empty state and suggestions
+  const es = document.getElementById('empty-state');
+  if (es) es.remove();
+  document.getElementById('suggestions').style.display = 'none';
+
+  // Add user message
+  addMessage('user', query);
+  input.value = '';
+  input.style.height = 'auto';
+  history.push({role: 'user', content: query});
+
+  // Disable input
+  document.getElementById('send-btn').disabled = true;
+  input.disabled = true;
+
+  // Add typing indicator
+  const typingId = 'typing-' + Date.now();
+  addTyping(typingId);
+
+  try {
+    const resp = await fetch('/portal/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query, history: history.slice(-6)})
+    });
+    const data = await resp.json();
+    removeTyping(typingId);
+
+    if (data.answer) {
+      addMessage('ai', data.answer, data.sources || []);
+      history.push({role: 'assistant', content: data.answer});
+    } else {
+      addMessage('ai', 'Error: ' + (data.error || 'Unknown error'), []);
+    }
+  } catch (e) {
+    removeTyping(typingId);
+    addMessage('ai', 'Connection error. Check that the server is running.', []);
+  }
+
+  document.getElementById('send-btn').disabled = false;
+  input.disabled = false;
+  input.focus();
+}
+
+function addMessage(role, text, sources) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const avatar = role === 'user' ? 'M' : '◈';
+  const name = role === 'user' ? 'You' : 'CodeMed AI';
+  const rendered = role === 'ai' ? renderMarkdown(text) : text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let sourcesHtml = '';
+  if (sources && sources.length) {
+    sourcesHtml = '<div class="msg-sources">' + sources.map(s =>
+      `<span class="source-tag">[${s.id}] ${s.title.substring(0,40)}${s.title.length>40?'...':''}</span>`
+    ).join('') + '</div>';
+  }
+  div.innerHTML = `
+    <div class="msg-avatar ${role}">${avatar}</div>
+    <div class="msg-content">
+      <div class="msg-name">${name}</div>
+      <div class="msg-bubble"><p>${rendered}</p></div>
+      ${sourcesHtml}
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addTyping(id) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg'; div.id = id;
+  div.innerHTML = `<div class="msg-avatar ai">◈</div><div class="msg-content"><div class="msg-name">CodeMed AI</div><div class="msg-bubble"><div class="typing"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div></div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+</script>
+</body>
+</html>
