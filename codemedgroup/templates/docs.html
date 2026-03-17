@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Docs — CodeMed Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--blue:#2563EB;--blue-glow:#3B82F6;--cyan:#06B6D4;--green:#10B981;--red:#EF4444;--yellow:#F59E0B;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.25;pointer-events:none}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);flex-shrink:0;z-index:10;position:fixed;top:0;bottom:0;display:flex;flex-direction:column}
+.logo{padding:24px 20px;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+.nav{padding:16px 12px;flex:1}
+.nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(37,99,235,.15);color:var(--blue-glow);border-left:2px solid var(--blue)}
+.nav-icon{width:16px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.status-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;box-shadow:0 0 6px var(--green)}
+.status-text{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.main{margin-left:220px;flex:1;z-index:1}
+.topbar{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;background:rgba(6,8,13,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:5}
+.page-title{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.page-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.content{padding:32px;max-width:1000px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:24px}
+.card-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600}
+.card-body{padding:22px}
+/* Tier cards */
+.tier-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+.tier-card{border:1px solid var(--border);border-radius:8px;padding:18px;text-align:center}
+.tier-card.highlighted{border-color:var(--blue);background:rgba(37,99,235,.05)}
+.tier-name{font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+.tier-price{font-size:22px;font-weight:700;font-family:var(--mono);margin-bottom:4px}
+.tier-rpm{font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px}
+.tier-features{font-size:12px;color:var(--subtle);line-height:1.7;text-align:left}
+/* Code blocks */
+.code-block{background:#000;border:1px solid var(--border);border-radius:7px;padding:16px 18px;font-family:var(--mono);font-size:12.5px;line-height:1.7;overflow-x:auto;margin-top:10px;position:relative}
+.code-block .method-get{color:var(--green);font-weight:700}
+.code-block .method-post{color:var(--yellow);font-weight:700}
+.code-block .url{color:var(--cyan)}
+.code-block .key{color:var(--blue-glow)}
+.code-block .val{color:#A78BFA}
+.code-block .str{color:#6EE7B7}
+.code-block .comment{color:#475569}
+.copy-code{position:absolute;top:8px;right:8px;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;font-family:var(--mono)}
+.copy-code:hover{border-color:var(--cyan);color:var(--cyan)}
+/* Endpoint rows */
+.endpoint{border:1px solid var(--border);border-radius:7px;margin-bottom:10px;overflow:hidden}
+.endpoint-header{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;background:var(--surface2);transition:background .15s}
+.endpoint-header:hover{background:rgba(37,99,235,.05)}
+.method{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;width:48px;text-align:center;flex-shrink:0}
+.method.get{background:rgba(16,185,129,.12);color:var(--green)}
+.method.post{background:rgba(245,158,11,.12);color:var(--yellow)}
+.endpoint-path{font-family:var(--mono);font-size:13px;color:var(--cyan);font-weight:600}
+.endpoint-desc{font-size:12.5px;color:var(--muted);margin-left:auto}
+.endpoint-body{padding:16px;border-top:1px solid var(--border);display:none}
+/* Key management */
+.key-form{display:flex;gap:10px;margin-bottom:20px}
+.key-form input,.key-form select{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13.5px;border-radius:7px;padding:10px 14px;outline:none}
+.key-form input:focus,.key-form select:focus{border-color:var(--blue)}
+.key-form select option{background:var(--surface2)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-blue:hover{background:#1D4ED8;box-shadow:0 0 20px rgba(37,99,235,.4)}
+.keys-table{width:100%;border-collapse:collapse;font-size:13px}
+.keys-table th{padding:10px 14px;text-align:left;font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+.keys-table td{padding:11px 14px;border-bottom:1px solid rgba(30,36,53,.6);vertical-align:middle}
+.keys-table tr:last-child td{border-bottom:none}
+.tier-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-family:var(--mono)}
+.tier-demo{background:rgba(100,116,139,.15);color:var(--muted)}
+.tier-starter{background:rgba(6,182,212,.12);color:var(--cyan)}
+.tier-growth{background:rgba(37,99,235,.15);color:var(--blue-glow)}
+.tier-enterprise{background:rgba(245,158,11,.12);color:var(--yellow)}
+/* New key reveal */
+.key-reveal{background:#000;border:1px solid var(--green);border-radius:7px;padding:14px 18px;font-family:var(--mono);font-size:13px;color:var(--green);margin-bottom:16px;display:none;word-break:break-all}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">CMG</div>
+      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.0 · HIPAA Compliant</div></div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Platform</div>
+    <a href="/" class="nav-item"><span class="nav-icon">⬡</span>Dashboard</a>
+    <a href="/chat" class="nav-item"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
+    <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
+    <a href="/appeals" class="nav-item"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Developer</div>
+    <a href="/docs" class="nav-item active"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
+  </div>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span><span class="status-text">API v1.0 · Operational</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title">◫ Regulatory Intelligence API</div>
+      <div class="page-sub">REST API · HIPAA Compliant · claude-sonnet-4 · Metered Usage</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- Pricing -->
+    <div class="tier-grid">
+      {% for tier_id, tier in tiers.items() %}
+      <div class="tier-card {% if tier_id == 'growth' %}highlighted{% endif %}">
+        <div class="tier-name">{{ tier_id }}</div>
+        <div class="tier-price" style="color:{% if tier_id=='demo' %}var(--muted){% elif tier_id=='starter' %}var(--cyan){% elif tier_id=='growth' %}var(--blue-glow){% else %}var(--yellow){% endif %}">
+          {% if tier['price'] == 0 %}Free{% else %}${{ tier['price'] }}/mo{% endif %}
+        </div>
+        <div class="tier-rpm">{{ tier['rpm'] }} req/min · {% if tier['monthly'] == 999999 %}Unlimited{% else %}{{ "{:,}".format(tier['monthly']) }}/mo{% endif %}</div>
+        <div class="tier-features">
+          {% if tier_id == 'demo' %}Testing only<br>No BAA<br>No SLA{% endif %}
+          {% if tier_id == 'starter' %}RAG queries<br>V28 lookup<br>Policy search{% endif %}
+          {% if tier_id == 'growth' %}All endpoints<br>Batch V28<br>Appeals API{% endif %}
+          {% if tier_id == 'enterprise' %}All endpoints<br>BAA included<br>SLA + support{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Authentication -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">Authentication</div></div>
+      <div class="card-body">
+        <p style="font-size:13.5px;color:var(--subtle);margin-bottom:12px">All API requests require an API key passed as a header. Keys are created below.</p>
+        <div class="code-block">
+<span class="comment"># Pass your API key in the X-API-Key header</span>
+curl -X POST https://codemedgroup.com/api/v1/query \
+  -H <span class="str">"X-API-Key: cmg_your_key_here"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"query": "prior auth criteria for lumbar MRI"}'</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Endpoints -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">API Endpoints</div><span style="font-size:11px;color:var(--muted);font-family:var(--mono)">Base: /api/v1</span></div>
+      <div class="card-body">
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/status</span>
+            <span class="endpoint-desc">Corpus health check — no auth required</span>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/query</span>
+            <span class="endpoint-desc">RAG query against 1,300+ CMS policies</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// Request body</span>
+{
+  <span class="key">"query"</span>: <span class="str">"What documentation is required for CPAP coverage?"</span>,
+  <span class="key">"history"</span>: [...]  <span class="comment">// Optional: prior conversation turns</span>
+}
+
+<span class="comment">// Response</span>
+{
+  <span class="key">"answer"</span>: <span class="str">"Per LCD L38394, CPAP (E0601) is covered when..."</span>,
+  <span class="key">"sources"</span>: [{ <span class="key">"id"</span>: <span class="str">"L38394"</span>, <span class="key">"title"</span>: <span class="str">"Sleep Testing..."</span> }],
+  <span class="key">"response_ms"</span>: <span class="val">842</span>,
+  <span class="key">"tier"</span>: <span class="str">"starter"</span>,
+  <span class="key">"model"</span>: <span class="str">"claude-sonnet-4-20250514"</span>
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/v28/lookup?code=I50.9</span>
+            <span class="endpoint-desc">Single V28 HCC status + upgrade paths</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// Response for I50.9 (rejected in V28)</span>
+{
+  <span class="key">"code"</span>: <span class="str">"I50.9"</span>,
+  <span class="key">"description"</span>: <span class="str">"Heart failure, unspecified"</span>,
+  <span class="key">"status"</span>: <span class="str">"REJECTED"</span>,
+  <span class="key">"v28_hcc"</span>: <span class="val">null</span>,
+  <span class="key">"v24_hcc"</span>: <span class="str">"85"</span>,
+  <span class="key">"v28_pays"</span>: <span class="val">false</span>,
+  <span class="key">"upgrade_suggestions"</span>: [
+    { <span class="key">"icd10_code"</span>: <span class="str">"I50.22"</span>, <span class="key">"payment_tier"</span>: <span class="str">"high"</span> }
+  ]
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/v28/batch</span>
+            <span class="endpoint-desc">Batch audit up to 200 codes at once</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// Request</span>
+{ <span class="key">"codes"</span>: [<span class="str">"I50.9"</span>, <span class="str">"E11.9"</span>, <span class="str">"F32.9"</span>, <span class="str">"J44.9"</span>] }
+
+<span class="comment">// Response</span>
+{
+  <span class="key">"total"</span>: <span class="val">4</span>, <span class="key">"valid"</span>: <span class="val">1</span>,
+  <span class="key">"rejected"</span>: <span class="val">3</span>, <span class="key">"revenue_risk_count"</span>: <span class="val">3</span>,
+  <span class="key">"results"</span>: [...]
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/policies/search?q=cardiac&type=lcd</span>
+            <span class="endpoint-desc">Full-text policy search with filters</span>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/policies/:source_id</span>
+            <span class="endpoint-desc">Fetch full policy by ID (e.g. L38226)</span>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/classify</span>
+            <span class="endpoint-desc">Classify a document using taxonomy engine</span>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/appeals/generate</span>
+            <span class="endpoint-desc">Generate LCD/NCD-cited appeal letter</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// Request</span>
+{
+  <span class="key">"cpt_code"</span>: <span class="str">"93228"</span>,
+  <span class="key">"icd10_codes"</span>: [<span class="str">"I48.0"</span>, <span class="str">"R00.1"</span>],
+  <span class="key">"denial_reason"</span>: <span class="str">"Medical Necessity"</span>,
+  <span class="key">"denial_date"</span>: <span class="str">"2026-02-15"</span>,
+  <span class="key">"payer"</span>: <span class="str">"UnitedHealthcare"</span>,
+  <span class="key">"provider_name"</span>: <span class="str">"Riverside Cardiology"</span>
+}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Key management -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">API Key Management</div></div>
+      <div class="card-body">
+        <div id="key-reveal" class="key-reveal"></div>
+        <div class="key-form">
+          <input type="text" id="key-name" placeholder="Customer / organization name">
+          <select id="key-tier">
+            {% for tier_id in tiers %}
+            <option value="{{ tier_id }}">{{ tier_id | capitalize }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-blue" onclick="createKey()">⊕ Create Key</button>
+        </div>
+
+        {% if api_keys %}
+        <table class="keys-table">
+          <thead><tr><th>Customer</th><th>Tier</th><th>Usage</th><th>Last Used</th><th>Created</th></tr></thead>
+          <tbody>
+            {% for k in api_keys %}
+            <tr>
+              <td style="font-weight:500">{{ k.customer_name }}</td>
+              <td><span class="tier-pill tier-{{ k.tier }}">{{ k.tier }}</span></td>
+              <td style="font-family:var(--mono);color:var(--muted)">{{ k.monthly_usage }} calls</td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--muted)">{{ k.last_used or '—' }}</td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--muted)">{{ k.created_at[:10] if k.created_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div style="text-align:center;color:var(--muted);padding:30px;font-size:13px">No API keys yet. Create one above.</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function toggleEndpoint(header) {
+  const body = header.nextElementSibling;
+  if (!body || !body.classList.contains('endpoint-body')) return;
+  body.style.display = body.style.display === 'block' ? 'none' : 'block';
+}
+
+async function createKey() {
+  const name = document.getElementById('key-name').value.trim();
+  const tier = document.getElementById('key-tier').value;
+  if (!name) { alert('Enter a customer name.'); return; }
+  const fd = new FormData();
+  fd.append('name', name); fd.append('tier', tier);
+  try {
+    const r = await fetch('/portal/key/create', {method:'POST', body: fd});
+    const d = await r.json();
+    if (d.api_key) {
+      const reveal = document.getElementById('key-reveal');
+      reveal.style.display = 'block';
+      reveal.innerHTML = `✓ New API Key Created — Save this now, it won't be shown again:<br><br>${d.api_key}<br><br>Customer: ${d.customer} · Tier: ${d.tier}`;
+      document.getElementById('key-name').value = '';
+      setTimeout(() => location.reload(), 5000);
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+</script>
+</body>
+</html>
