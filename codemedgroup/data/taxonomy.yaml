@@ -1,0 +1,136 @@
+document_types:
+  lcd:
+    label: "Local Coverage Determination"
+    weight: 1.2
+    keywords:
+      - "local coverage determination"
+      - "LCD"
+      - "covered indications"
+      - "limitations"
+      - "medical necessity"
+      - "contractor"
+      - "MAC"
+      - "jurisdiction"
+      - "medicare administrative contractor"
+      - "coverage indications"
+      - "documentation requirements"
+      - "ICD-10-CM codes that support"
+
+  ncd:
+    label: "National Coverage Determination"
+    weight: 1.3
+    keywords:
+      - "national coverage determination"
+      - "NCD"
+      - "national policy"
+      - "CMS determination"
+      - "benefit category"
+      - "national coverage"
+      - "medicare coverage database"
+      - "coverage decision memorandum"
+
+  prior_auth:
+    label: "Prior Authorization Policy"
+    weight: 1.0
+    keywords:
+      - "prior authorization"
+      - "prior auth"
+      - "pre-authorization"
+      - "PA required"
+      - "authorization required"
+      - "precertification"
+      - "pre-certification"
+      - "prior approval"
+      - "step therapy"
+      - "step edit"
+      - "quantity limit"
+
+  payer_policy:
+    label: "Payer Clinical Policy"
+    weight: 1.0
+    keywords:
+      - "clinical policy"
+      - "coverage policy"
+      - "medical policy"
+      - "benefit policy"
+      - "plan policy"
+      - "clinical criteria"
+      - "coverage criteria"
+      - "commercial policy"
+      - "health plan"
+      - "insurer"
+      - "payer"
+
+  hipaa:
+    label: "HIPAA / Compliance Document"
+    weight: 1.1
+    keywords:
+      - "HIPAA"
+      - "protected health information"
+      - "PHI"
+      - "privacy rule"
+      - "security rule"
+      - "covered entity"
+      - "business associate"
+      - "breach notification"
+      - "minimum necessary"
+      - "Notice of Privacy Practices"
+      - "NPP"
+      - "45 CFR"
+      - "de-identification"
+      - "authorization form"
+      - "right of access"
+
+  remittance:
+    label: "Remittance Advice / EOB"
+    weight: 1.0
+    keywords:
+      - "remittance"
+      - "explanation of benefits"
+      - "EOB"
+      - "claim adjustment"
+      - "adjustment reason code"
+      - "CARC"
+      - "RARC"
+      - "835"
+      - "electronic remittance"
+      - "claim status"
+      - "remark code"
+      - "denial code"
+      - "CO-"
+      - "PR-"
+
+  unknown:
+    label: "Unknown / Unclassified"
+    weight: 0.0
+    keywords: []
+
+confidence_thresholds:
+  auto_accept: 0.60
+  reject: 0.20
+
+routing_matrix:
+  lcd:
+    targets:
+      - "NexusAuth"
+      - "PolicyReview"
+  ncd:
+    targets:
+      - "NexusAuth"
+      - "PolicyReview"
+  prior_auth:
+    targets:
+      - "NexusAuth"
+  payer_policy:
+    targets:
+      - "NexusAuth"
+      - "PayerReview"
+  hipaa:
+    targets:
+      - "ComplianceReview"
+  remittance:
+    targets:
+      - "BillingReview"
+  unknown:
+    targets:
+      - "REVIEW"

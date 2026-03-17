@@ -3,8 +3,9 @@ CodeMed Group — Database Builder
 Run once: python data/build_seed_db.py
 Builds nexusauth.db with schema + seeded CMS LCD/NCD data + V28 codes
 """
-import sqlite3, json, hashlib, secrets
+import sys, sqlite3, json, hashlib, secrets
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
 
 DB_PATH = Path(__file__).parent / "nexusauth.db"
 
@@ -34,15 +35,17 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 
 CREATE TABLE IF NOT EXISTS v28_hcc_codes (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    icd10_code    TEXT NOT NULL UNIQUE,
-    description   TEXT,
-    v28_hcc       TEXT,
-    v24_hcc       TEXT,
-    v28_pays      INTEGER DEFAULT 0,
-    v24_pays      INTEGER DEFAULT 0,
-    hcc_label     TEXT,
-    payment_tier  TEXT DEFAULT 'standard'
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    icd10_code         TEXT NOT NULL UNIQUE,
+    description        TEXT,
+    v28_hcc            TEXT,
+    v24_hcc            TEXT,
+    v28_pays           INTEGER DEFAULT 0,
+    v24_pays           INTEGER DEFAULT 0,
+    hcc_label          TEXT,
+    payment_tier       TEXT DEFAULT 'standard',
+    v28_change_note    TEXT,
+    clinical_rationale TEXT
 );
 
 CREATE TABLE IF NOT EXISTS api_keys (
@@ -67,6 +70,63 @@ CREATE TABLE IF NOT EXISTS audit_log (
     response_time_ms INTEGER,
     created_at       TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS hipaa_corpus (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id       TEXT NOT NULL UNIQUE,
+    title           TEXT NOT NULL,
+    section         TEXT,
+    category        TEXT,
+    content_text    TEXT,
+    summary_text    TEXT,
+    effective_date  TEXT,
+    content_hash    TEXT UNIQUE,
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+    source_id UNINDEXED,
+    title,
+    content_text,
+    indication_text,
+    coding_text,
+    content=documents,
+    content_rowid=id,
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS hipaa_fts USING fts5(
+    source_id UNINDEXED,
+    title,
+    section,
+    content_text,
+    summary_text,
+    content=hipaa_corpus,
+    content_rowid=id,
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS documents_ai AFTER INSERT ON documents BEGIN
+    INSERT INTO documents_fts(rowid, source_id, title, content_text, indication_text, coding_text)
+    VALUES (new.id, new.source_id, new.title, new.content_text, new.indication_text, new.coding_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS documents_ad AFTER DELETE ON documents BEGIN
+    INSERT INTO documents_fts(documents_fts, rowid, source_id, title, content_text, indication_text, coding_text)
+    VALUES ('delete', old.id, old.source_id, old.title, old.content_text, old.indication_text, old.coding_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS documents_au AFTER UPDATE ON documents BEGIN
+    INSERT INTO documents_fts(documents_fts, rowid, source_id, title, content_text, indication_text, coding_text)
+    VALUES ('delete', old.id, old.source_id, old.title, old.content_text, old.indication_text, old.coding_text);
+    INSERT INTO documents_fts(rowid, source_id, title, content_text, indication_text, coding_text)
+    VALUES (new.id, new.source_id, new.title, new.content_text, new.indication_text, new.coding_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS hipaa_ai AFTER INSERT ON hipaa_corpus BEGIN
+    INSERT INTO hipaa_fts(rowid, source_id, title, section, content_text, summary_text)
+    VALUES (new.id, new.source_id, new.title, new.section, new.content_text, new.summary_text);
+END;
 """
 
 DOCUMENTS = [
@@ -598,13 +658,31 @@ def build():
             doc.get("confidence_score", 0.85), doc.get("effective_date","2024-01-01"), h
         ))
 
-    # Insert V28 codes
+    # Insert V28 seed codes
     for row in V28_CODES:
         conn.execute("""
             INSERT OR IGNORE INTO v28_hcc_codes
             (icd10_code, description, v28_hcc, v24_hcc, v28_pays, v24_pays, hcc_label, payment_tier)
             VALUES (?,?,?,?,?,?,?,?)
         """, row)
+
+    # Insert expanded V28 codes (~237 additional high-revenue codes)
+    try:
+        from v28_hcc_expanded import V28_CODES_EXPANDED, get_change_note
+        for row in V28_CODES_EXPANDED:
+            conn.execute("""
+                INSERT OR IGNORE INTO v28_hcc_codes
+                (icd10_code, description, v28_hcc, v24_hcc, v28_pays, v24_pays, hcc_label, payment_tier)
+                VALUES (?,?,?,?,?,?,?,?)
+            """, row)
+            note, rationale = get_change_note(row[0])
+            if note or rationale:
+                conn.execute("""
+                    UPDATE v28_hcc_codes SET v28_change_note=?, clinical_rationale=?
+                    WHERE icd10_code=?
+                """, (note, rationale, row[0]))
+    except ImportError:
+        pass  # Expanded module optional
 
     # Seed a demo API key
     import secrets as s
@@ -618,12 +696,13 @@ def build():
     conn.commit()
     conn.close()
 
-    doc_count = len(DOCUMENTS)
-    v28_count = len(V28_CODES)
-    rejected = sum(1 for r in V28_CODES if r[4] == 0 and r[5] == 1)
+    conn2 = sqlite3.connect(DB_PATH)
+    v28_total   = conn2.execute("SELECT COUNT(*) FROM v28_hcc_codes").fetchone()[0]
+    v28_rejected = conn2.execute("SELECT COUNT(*) FROM v28_hcc_codes WHERE v28_pays=0 AND v24_pays=1").fetchone()[0]
+    conn2.close()
     print(f"✅ nexusauth.db built at {DB_PATH}")
-    print(f"   {doc_count} LCD/NCD documents")
-    print(f"   {v28_count} V28 HCC codes ({rejected} rejected in V28)")
+    print(f"   {len(DOCUMENTS)} LCD/NCD documents")
+    print(f"   {v28_total} V28 HCC codes ({v28_rejected} rejected in V28)")
     print(f"   Demo API key: {demo_key}")
 
 if __name__ == "__main__":
