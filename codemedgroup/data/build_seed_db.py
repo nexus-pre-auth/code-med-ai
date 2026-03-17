@@ -127,6 +127,38 @@ CREATE TRIGGER IF NOT EXISTS hipaa_ai AFTER INSERT ON hipaa_corpus BEGIN
     INSERT INTO hipaa_fts(rowid, source_id, title, section, content_text, summary_text)
     VALUES (new.id, new.source_id, new.title, new.section, new.content_text, new.summary_text);
 END;
+
+-- V28 HCC category reference (115 payment HCCs with metadata)
+CREATE TABLE IF NOT EXISTS v28_hcc_categories (
+    hcc_number       INTEGER PRIMARY KEY,
+    description      TEXT NOT NULL,
+    disease_family   TEXT,
+    severity         TEXT DEFAULT 'standard',
+    raf_weight       REAL DEFAULT 0.0,
+    hierarchy_group  TEXT,
+    created_at       TEXT DEFAULT (datetime('now'))
+);
+
+-- CMS model configuration: normalization factors, MA coding adjustment, PACE blend
+CREATE TABLE IF NOT EXISTS cms_model_config (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    config_year      INTEGER NOT NULL,
+    config_key       TEXT NOT NULL,
+    config_value     TEXT NOT NULL,
+    description      TEXT,
+    source           TEXT,
+    UNIQUE(config_year, config_key)
+);
+
+-- Encounter-eligible CPT/HCPCS codes for V28 encounter filtering
+-- Loaded from CMS ZIP: 2026-medicare-advantage-risk-adjustment-eligible-cpt-hcpcs-codes.zip
+CREATE TABLE IF NOT EXISTS v28_eligible_cpt (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    code             TEXT NOT NULL UNIQUE,
+    code_type        TEXT DEFAULT 'CPT',
+    description      TEXT,
+    eligible_year    INTEGER DEFAULT 2026
+);
 """
 
 DOCUMENTS = [
@@ -683,6 +715,63 @@ def build():
                 """, (note, rationale, row[0]))
     except ImportError:
         pass  # Expanded module optional
+
+    # Seed V28 HCC category reference table
+    try:
+        from v28_hcc_categories import V28_HCC_CATEGORIES
+        for hcc_num, cat in V28_HCC_CATEGORIES.items():
+            conn.execute("""
+                INSERT OR IGNORE INTO v28_hcc_categories
+                (hcc_number, description, disease_family, severity, raf_weight, hierarchy_group)
+                VALUES (?,?,?,?,?,?)
+            """, (
+                hcc_num,
+                cat.get("desc", ""),
+                cat.get("family", ""),
+                cat.get("severity", "standard"),
+                cat.get("raf_weight", 0.0),
+                cat.get("hierarchy_group"),
+            ))
+    except ImportError:
+        pass  # Optional — populated by cms_zip_ingest.py
+
+    # Seed 2026 CMS model configuration (normalization factors, MA coding adjustment)
+    CMS_2026_CONFIG = [
+        # Normalization factors — applied to RAF before payment calculation
+        (2026, "norm_factor_cms_hcc_v28_part_c",    "1.067",  "2024 CMS-HCC V28 Part C normalization factor", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_cms_hcc_v22_part_c",    "1.187",  "2017 CMS-HCC V22 Part C normalization factor (PACE blend)", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_dialysis_v24",      "1.062",  "2023 ESRD V24 dialysis normalization factor", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_dialysis_v21",      "1.129",  "2019 ESRD V21 dialysis normalization factor (PACE)", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_graft_v24",         "1.104",  "2023 ESRD V24 graft normalization factor", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_graft_v21",         "1.203",  "2019 ESRD V21 graft normalization factor (PACE)", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_rxhcc_ma_pd",            "1.194",  "RxHCC MA-PD 2022/2023 calibration normalization", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_rxhcc_pdp",              "0.887",  "RxHCC PDP 2022/2023 calibration normalization", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_rxhcc_pace",             "1.202",  "RxHCC PACE 2018/2019 calibration normalization", "2026 CMS Final Rate Announcement"),
+        # MA coding intensity adjustment
+        (2026, "ma_coding_intensity_adjustment",     "0.059",  "5.90% statutory minimum coding intensity adjustment applied to all MA plans", "2026 CMS Final Rate Announcement"),
+        # PACE blending
+        (2026, "pace_v28_blend_pct",                 "0.10",   "PACE plans: 10% V28 (2024 CMS-HCC) weight in 2026", "2026 CMS Final Rate Announcement"),
+        (2026, "pace_v22_blend_pct",                 "0.90",   "PACE plans: 90% V22 (2017 CMS-HCC) weight in 2026", "2026 CMS Final Rate Announcement"),
+        # Non-PACE MA
+        (2026, "non_pace_v28_blend_pct",             "1.00",   "Non-PACE MA: 100% V28 (full phase-in complete)", "2026 CMS Final Rate Announcement"),
+        # Revenue impact
+        (2026, "avg_risk_score_change_v28_vs_blend", "-0.0301", "-3.01% average risk score change vs 2025 V24/V28 blend", "2026 CMS Final Rate Announcement"),
+        (2026, "ma_payment_increase_pct",            "0.0506",  "5.06% average MA payment increase for 2026", "2026 CMS Final Rate Announcement"),
+        (2026, "effective_growth_rate",              "0.0904",  "9.04% effective growth rate (includes Q4 2024 FFS data)", "2026 CMS Final Rate Announcement"),
+        # Data sources
+        (2026, "data_source_non_pace",              "encounter_data_ffs_only", "Non-PACE: encounter data + FFS claims only; RAPS no longer accepted for new data", "2026 Implementation Memo"),
+        (2026, "data_source_pace",                  "raps_encounter_ffs_blend", "PACE: RAPS + encounter + FFS blended", "2026 Implementation Memo"),
+        # V28 model stats
+        (2026, "v28_payment_hccs",                  "115",    "Number of payment HCC categories in V28 (vs 86 in V24)", "CMS V28 Model Documentation"),
+        (2026, "v28_icd10_mapped_codes",             "7770",   "Approximate number of ICD-10-CM codes mapping to V28 payment HCCs (vs 9,797 in V24)", "CMS V28 Model Documentation"),
+        (2026, "v28_icd10_removed_codes",            "2290",   "ICD-10-CM codes removed from HCC mapping in V28 vs V24 transition", "CMS V28 Model Documentation"),
+    ]
+    for config_year, config_key, config_value, description, source in CMS_2026_CONFIG:
+        conn.execute("""
+            INSERT OR IGNORE INTO cms_model_config
+            (config_year, config_key, config_value, description, source)
+            VALUES (?,?,?,?,?)
+        """, (config_year, config_key, config_value, description, source))
 
     # Seed a demo API key
     import secrets as s

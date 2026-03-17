@@ -16,6 +16,12 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 BASE_DIR = Path(__file__).parent
+
+# Ensure data/ directory is on sys.path for module imports
+import sys as _sys
+_data_dir = str(BASE_DIR / "data")
+if _data_dir not in _sys.path:
+    _sys.path.insert(0, _data_dir)
 DB_PATH  = os.environ.get("DB_PATH", str(BASE_DIR / "data" / "nexusauth.db"))
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
@@ -407,11 +413,24 @@ def api_status():
     d = db.execute("SELECT COUNT(*) c, SUM(CASE WHEN document_type='lcd' THEN 1 ELSE 0 END) lcd, SUM(CASE WHEN document_type='ncd' THEN 1 ELSE 0 END) ncd FROM documents WHERE status='active'").fetchone()
     v = db.execute("SELECT COUNT(*) c, SUM(v28_pays) valid, SUM(CASE WHEN v24_pays=1 AND v28_pays=0 THEN 1 ELSE 0 END) rejected FROM v28_hcc_codes").fetchone()
     h = db.execute("SELECT COUNT(*) c FROM hipaa_corpus").fetchone()
-    return jsonify({"status":"operational","version":"1.1.0",
-        "corpus":{"total":d["c"],"lcd":d["lcd"],"ncd":d["ncd"],"hipaa":h["c"]},
-        "v28":{"total":v["c"],"valid":v["valid"],"rejected":v["rejected"]},
-        "model":"claude-sonnet-4-20250514","hipaa_compliant":True,
-        "timestamp":datetime.utcnow().isoformat()+"Z"})
+    cat_row = db.execute("SELECT COUNT(*) c FROM v28_hcc_categories").fetchone()
+    return jsonify({
+        "status": "operational",
+        "version": "1.2.0",
+        "corpus": {"total": d["c"], "lcd": d["lcd"], "ncd": d["ncd"], "hipaa": h["c"]},
+        "v28": {
+            "total": v["c"],
+            "valid": v["valid"],
+            "rejected": v["rejected"],
+            "hcc_categories": cat_row["c"],
+            "phase_in": "100% CY2026 (non-PACE MA)",
+            "normalization_factor": 1.067,
+            "ma_coding_adjustment": "5.90%",
+        },
+        "model": "claude-sonnet-4-20250514",
+        "hipaa_compliant": True,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    })
 
 @app.route("/api/v1/query", methods=["POST"])
 @require_api_key
@@ -477,8 +496,265 @@ def api_v28_batch():
     results  = [v28_lookup(c) for c in codes]
     valid    = [r for r in results if r["status"]=="VALID"]
     rejected = [r for r in results if r["status"]=="REJECTED"]
-    return jsonify({"total":len(codes),"valid":len(valid),"rejected":len(rejected),
-        "not_found":len(codes)-len(valid)-len(rejected),"revenue_risk_count":len(rejected),"results":results})
+
+    # Hierarchy analysis on the valid HCC set
+    hierarchy_analysis = None
+    try:
+        from v28_hcc_categories import enforce_hierarchy, score_interactions
+        valid_hcc_nums = []
+        for r in valid:
+            hcc = r.get("v28_hcc")
+            if hcc:
+                try: valid_hcc_nums.append(int(hcc))
+                except ValueError: pass
+        if valid_hcc_nums:
+            h = enforce_hierarchy(list(set(valid_hcc_nums)))
+            i = score_interactions(h["kept"])
+            hierarchy_analysis = {
+                "hccs_kept": h["kept"],
+                "hccs_suppressed_by_hierarchy": h["suppressed"],
+                "hierarchy_rules_fired": len(h["rules_applied"]),
+                "interaction_pairs_found": len(i["interactions_found"]),
+                "interaction_raf_bonus": i["total_interaction_raf"],
+                "radv_risk": "HIGH" if h["suppressed"] else "STANDARD",
+            }
+    except ImportError:
+        pass
+
+    return jsonify({
+        "total": len(codes),
+        "valid": len(valid),
+        "rejected": len(rejected),
+        "not_found": len(codes) - len(valid) - len(rejected),
+        "revenue_risk_count": len(rejected),
+        "hierarchy_analysis": hierarchy_analysis,
+        "results": results,
+    })
+
+@app.route("/api/v1/v28/categories")
+@require_api_key
+def api_v28_categories():
+    """Return all 115 V28 HCC payment categories with hierarchy and RAF data."""
+    try:
+        from v28_hcc_categories import (
+            V28_HCC_CATEGORIES, V28_HIERARCHIES, V28_INTERACTIONS
+        )
+        families = {}
+        for hcc, cat in V28_HCC_CATEGORIES.items():
+            f = cat["family"]
+            families.setdefault(f, []).append(hcc)
+
+        return jsonify({
+            "total_hccs": len(V28_HCC_CATEGORIES),
+            "categories": {
+                str(hcc): {
+                    "hcc": hcc,
+                    "description": cat["desc"],
+                    "family": cat["family"],
+                    "severity": cat["severity"],
+                    "raf_weight_approx": cat["raf_weight"],
+                    "hierarchy_group": cat.get("hierarchy_group"),
+                }
+                for hcc, cat in sorted(V28_HCC_CATEGORIES.items())
+            },
+            "hierarchy_rules": len(V28_HIERARCHIES),
+            "interaction_pairs": len(V28_INTERACTIONS),
+            "families": {f: sorted(hccs) for f, hccs in sorted(families.items())},
+            "model_year": 2026,
+            "phase_in": "100% V28 for non-PACE MA (full implementation CY2026)",
+        })
+    except ImportError:
+        # Fallback: read from database
+        db = get_db()
+        rows = db.execute(
+            "SELECT hcc_number, description, disease_family, severity, raf_weight "
+            "FROM v28_hcc_categories ORDER BY hcc_number"
+        ).fetchall()
+        return jsonify({
+            "total_hccs": len(rows),
+            "categories": [dict(r) for r in rows],
+            "note": "Extended metadata available after importing v28_hcc_categories module",
+        })
+
+
+@app.route("/api/v1/v28/simulate", methods=["POST"])
+@require_api_key
+def api_v28_simulate():
+    """
+    Simulate RAF score for a set of HCC numbers or ICD-10 codes.
+    Applies hierarchy suppression, interaction scoring, normalization.
+
+    Input: {
+      "hcc_numbers": [37, 226, 280, 328],   # V28 HCC numbers, OR
+      "icd10_codes": ["E11.42", "I50.22"],  # ICD-10 codes (auto-resolved to HCCs)
+      "age": 72,
+      "sex": "F",
+      "plan_type": "non_pace"               # "non_pace" | "pace"
+    }
+    """
+    try:
+        from v28_hcc_categories import simulate_raf, enforce_hierarchy, score_interactions
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available. Run build_seed_db.py first."}), 503
+
+    data   = request.get_json() or {}
+    age    = int(data.get("age", 70))
+    sex    = data.get("sex", "F").upper()
+    plan   = data.get("plan_type", "non_pace")
+
+    hcc_numbers = data.get("hcc_numbers", [])
+
+    # If ICD-10 codes provided, resolve to HCC numbers via database
+    icd_codes = data.get("icd10_codes", [])
+    if icd_codes:
+        db = get_db()
+        for code in icd_codes[:50]:
+            row = db.execute(
+                "SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+                (code.upper().strip(),)
+            ).fetchone()
+            if row and row["v28_hcc"]:
+                try:
+                    hcc_numbers.append(int(row["v28_hcc"]))
+                except ValueError:
+                    pass
+
+    if not hcc_numbers:
+        return jsonify({"error": "Provide hcc_numbers or icd10_codes with valid V28 mappings"}), 400
+
+    # Deduplicate
+    hcc_numbers = list(dict.fromkeys(hcc_numbers))
+
+    sim = simulate_raf(hcc_numbers, age=age, sex=sex)
+
+    # Apply MA coding intensity adjustment (5.90%) and normalization factor
+    norm_factor = 1.067  # Non-PACE V28 Part C normalization
+    if plan == "pace":
+        norm_factor = 0.10 * 1.067 + 0.90 * 1.187  # PACE blend
+    coding_adj = 1.0 - 0.059  # 5.90% coding intensity reduction
+
+    adjusted_raf = round(sim["total_raf"] * norm_factor * coding_adj, 4)
+
+    return jsonify({
+        **sim,
+        "plan_type": plan,
+        "normalization_factor": norm_factor,
+        "ma_coding_adjustment": 0.059,
+        "adjusted_raf": adjusted_raf,
+        "methodology": (
+            f"adjusted_raf = total_raf ({sim['total_raf']}) "
+            f"× norm_factor ({norm_factor}) "
+            f"× (1 − coding_adj 0.059)"
+        ),
+    })
+
+
+@app.route("/api/v1/v28/radv/<int:hcc>")
+@require_api_key
+def api_v28_radv(hcc: int):
+    """Return RADV documentation requirements for a specific HCC number."""
+    try:
+        from v28_hcc_categories import get_radv_requirements, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    cat = V28_HCC_CATEGORIES.get(hcc)
+    if not cat:
+        return jsonify({"error": f"HCC {hcc} not found in V28 category catalog"}), 404
+
+    reqs = get_radv_requirements(hcc)
+    return jsonify({
+        "hcc": hcc,
+        "description": cat["desc"],
+        "family": cat["family"],
+        "severity": cat["severity"],
+        "radv_requirements": reqs,
+        "encounter_filters": {
+            "face_to_face_required": True,
+            "audio_only_telehealth_excluded": True,
+            "lab_radiology_alone_excluded": True,
+            "data_source": "Encounter data + FFS only (non-PACE MA)",
+        },
+    })
+
+
+@app.route("/api/v1/v28/hierarchy", methods=["POST"])
+@require_api_key
+def api_v28_hierarchy():
+    """
+    Apply V28 hierarchy rules to a list of HCC numbers.
+    Returns which HCCs are kept vs suppressed and which rules fired.
+
+    Input: {"hcc_numbers": [37, 38, 226, 225, 280]}
+    """
+    try:
+        from v28_hcc_categories import enforce_hierarchy, score_interactions, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    data = request.get_json() or {}
+    hcc_numbers = data.get("hcc_numbers", [])
+    if not hcc_numbers:
+        return jsonify({"error": "hcc_numbers required"}), 400
+
+    h = enforce_hierarchy(hcc_numbers)
+    i = score_interactions(h["kept"])
+
+    return jsonify({
+        "input_hccs": hcc_numbers,
+        "kept": h["kept"],
+        "suppressed": h["suppressed"],
+        "hierarchy_rules_applied": h["rules_applied"],
+        "interactions": i["interactions_found"],
+        "interaction_raf_bonus": i["total_interaction_raf"],
+        "kept_details": [
+            {
+                "hcc": hcc,
+                "desc": V28_HCC_CATEGORIES.get(hcc, {}).get("desc", "Unknown"),
+                "raf_weight": V28_HCC_CATEGORIES.get(hcc, {}).get("raf_weight", 0.0),
+            }
+            for hcc in h["kept"]
+            if hcc in V28_HCC_CATEGORIES
+        ],
+    })
+
+
+@app.route("/api/v1/v28/normalization")
+@require_api_key
+def api_v28_normalization():
+    """Return 2026 CMS normalization factors, MA coding adjustment, and PACE blend ratios."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT config_key, config_value, description, source "
+        "FROM cms_model_config WHERE config_year=2026 ORDER BY config_key"
+    ).fetchall()
+
+    if not rows:
+        # Return hardcoded values if table not yet seeded
+        return jsonify({
+            "year": 2026,
+            "normalization_factors": {
+                "cms_hcc_v28_part_c": 1.067,
+                "cms_hcc_v22_part_c_pace": 1.187,
+                "esrd_dialysis_v24": 1.062,
+                "rxhcc_ma_pd": 1.194,
+            },
+            "ma_coding_intensity_adjustment": 0.059,
+            "non_pace_v28_blend": 1.00,
+            "pace_v28_blend": 0.10,
+            "pace_v22_blend": 0.90,
+            "ma_payment_increase_2026": 0.0506,
+            "effective_growth_rate_2026": 0.0904,
+            "note": "Run build_seed_db.py to persist config table",
+        })
+
+    config = {r["config_key"]: r["config_value"] for r in rows}
+    return jsonify({
+        "year": 2026,
+        "config": config,
+        "source": "2026 CMS Final Rate Announcement + Implementation Memo",
+    })
+
 
 @app.route("/api/v1/v28/explain")
 @require_api_key
