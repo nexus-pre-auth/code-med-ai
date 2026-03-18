@@ -1268,6 +1268,107 @@ def portal_appeals_post():
     ))
     return jsonify({"letter":letter,"sources":[{"id":d["source_id"],"title":d["title"]} for d in docs]})
 
+
+@app.route("/member")
+def portal_member():
+    return render_template("member.html")
+
+
+@app.route("/portal/member/risk-profile", methods=["POST"])
+def portal_member_risk_profile():
+    """Combined: V28 batch audit + RAF simulation + RADV analysis in one request."""
+    try:
+        from v28_hcc_categories import simulate_raf, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    data      = request.get_json() or {}
+    icd_codes = data.get("icd10_codes", [])
+    age       = int(data.get("age", 70))
+    sex       = data.get("sex", "F").upper()
+    plan      = data.get("plan_type", "non_pace")
+
+    if not icd_codes:
+        return jsonify({"error": "icd10_codes required"}), 400
+
+    # 1. V28 batch audit
+    results  = [v28_lookup(c) for c in icd_codes[:50]]
+    valid    = [r for r in results if r["status"] == "VALID"]
+    rejected = [r for r in results if r["status"] == "REJECTED"]
+
+    # 2. Resolve valid ICD-10 codes → HCC numbers
+    db = get_db()
+    hcc_numbers = []
+    for code in icd_codes[:50]:
+        row = db.execute(
+            "SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+            (code.upper().strip(),)
+        ).fetchone()
+        if row and row["v28_hcc"]:
+            try:
+                hcc_numbers.append(int(row["v28_hcc"]))
+            except ValueError:
+                pass
+    hcc_numbers = list(dict.fromkeys(hcc_numbers))
+
+    # 3. RAF simulation
+    raf_result = None
+    if hcc_numbers:
+        sim = simulate_raf(hcc_numbers, age=age, sex=sex)
+        norm_factor  = 1.067 if plan != "pace" else round(0.10 * 1.067 + 0.90 * 1.187, 4)
+        adjusted_raf = round(sim["total_raf"] * norm_factor * 0.941, 4)
+
+        interactions_ui = [
+            {
+                "hcc1": ix.get("hccs", [None])[0],
+                "hcc2": ix.get("hccs", [None, None])[1],
+                "description": ix.get("desc") or ix.get("label", ""),
+                "raf": ix.get("additional_raf", 0.0),
+            }
+            for ix in sim.get("interactions_found", [])
+        ]
+        suppressed_details = [
+            {"hcc": (h if isinstance(h, int) else h.get("hcc", h)),
+             "desc": V28_HCC_CATEGORIES.get(h if isinstance(h, int) else h.get("hcc", h), {}).get("desc", "")}
+            for h in sim.get("suppressed_hccs", [])
+        ]
+        raf_result = {
+            **sim,
+            "hcc_details": sim.get("active_hccs", []),
+            "suppressed_hccs": suppressed_details,
+            "interactions": interactions_ui,
+            "normalization_factor": norm_factor,
+            "ma_coding_adjustment": 0.059,
+            "adjusted_raf": adjusted_raf,
+            "plan_type": plan,
+        }
+
+    # 4. Revenue opportunities from rejected codes
+    revenue_opps = [
+        {
+            "from_code": r["code"],
+            "to_code": upg["icd10_code"],
+            "description": upg.get("description") or upg.get("hcc_label", ""),
+            "hcc": upg.get("v28_hcc"),
+            "tier": upg.get("payment_tier", "standard"),
+        }
+        for r in rejected
+        for upg in (r.get("upgrade_suggestions") or [])[:2]
+    ]
+
+    suppressed_count = len(raf_result.get("suppressed_hccs", [])) if raf_result else 0
+
+    return jsonify({
+        "audit":  {"total": len(results), "valid": len(valid), "rejected": len(rejected),
+                   "not_found": len(results) - len(valid) - len(rejected), "results": results},
+        "raf":    raf_result,
+        "radv_risk": "HIGH" if suppressed_count > 0 else "STANDARD",
+        "suppressed_count": suppressed_count,
+        "revenue_opportunities": revenue_opps,
+        "member": {"age": age, "sex": sex, "plan_type": plan},
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
