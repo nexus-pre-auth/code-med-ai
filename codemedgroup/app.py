@@ -1042,28 +1042,35 @@ def portal_raf_post():
         norm_factor = round(0.10 * 1.067 + 0.90 * 1.187, 4)
     adjusted_raf = round(sim["total_raf"] * norm_factor * (1.0 - 0.059), 4)
 
-    # Enrich kept/suppressed with descriptions
-    kept_details = []
-    for hcc in sim.get("kept_hccs", []):
-        cat = V28_HCC_CATEGORIES.get(hcc, {})
-        kept_details.append({
-            "hcc": hcc,
-            "desc": cat.get("desc", ""),
-            "raf_weight": cat.get("raf_weight", 0.0),
-        })
+    # active_hccs already has {hcc, desc, raf_weight} from simulate_raf
+    hcc_details = sim.get("active_hccs", [])
 
+    # Enrich suppressed HCC ints with descriptions
     suppressed_details = []
     for hcc in sim.get("suppressed_hccs", []):
-        cat = V28_HCC_CATEGORIES.get(hcc, {})
+        hcc_int = hcc if isinstance(hcc, int) else hcc.get("hcc", hcc)
+        cat = V28_HCC_CATEGORIES.get(hcc_int, {})
         suppressed_details.append({
-            "hcc": hcc,
+            "hcc": hcc_int,
             "desc": cat.get("desc", "Suppressed by hierarchy rule"),
+        })
+
+    # Remap interactions to frontend-expected shape {hcc1, hcc2, description, raf}
+    interactions_ui = []
+    for ix in sim.get("interactions_found", []):
+        hccs = ix.get("hccs", [])
+        interactions_ui.append({
+            "hcc1": hccs[0] if len(hccs) > 0 else None,
+            "hcc2": hccs[1] if len(hccs) > 1 else None,
+            "description": ix.get("desc") or ix.get("label", ""),
+            "raf": ix.get("additional_raf", 0.0),
         })
 
     return jsonify({
         **sim,
-        "hcc_details": kept_details,
+        "hcc_details": hcc_details,
         "suppressed_hccs": suppressed_details,
+        "interactions": interactions_ui,
         "plan_type": plan,
         "normalization_factor": norm_factor,
         "ma_coding_adjustment": 0.059,
