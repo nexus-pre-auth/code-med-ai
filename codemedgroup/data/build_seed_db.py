@@ -150,6 +150,17 @@ CREATE TABLE IF NOT EXISTS cms_model_config (
     UNIQUE(config_year, config_key)
 );
 
+-- Portal user accounts (optional auth — enforced via REQUIRE_AUTH env var)
+CREATE TABLE IF NOT EXISTS users (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    email        TEXT NOT NULL UNIQUE,
+    name         TEXT NOT NULL,
+    password     TEXT NOT NULL,
+    role         TEXT DEFAULT 'user',
+    active       INTEGER DEFAULT 1,
+    created_at   TEXT DEFAULT (datetime('now'))
+);
+
 -- Encounter-eligible CPT/HCPCS codes for V28 encounter filtering
 -- Loaded from CMS ZIP: 2026-medicare-advantage-risk-adjustment-eligible-cpt-hcpcs-codes.zip
 CREATE TABLE IF NOT EXISTS v28_eligible_cpt (
@@ -962,6 +973,175 @@ PMC CLOUD TRANSITION (Technical Note for API Users):
         "icd10_codes": json.dumps(["Z34.00","F32.9","F20.9"]),
         "specialties": json.dumps(["managed_care","compliance","population_health","policy"]),
         "confidence_score": 0.93, "effective_date": "2026-01-01",
+    },
+    # ── V28 Encounter Eligibility Intelligence ──────────────────────────────────
+    {
+        "source_id": "CMS-V28-ENCOUNTER-ELIGIBILITY-2026", "source_type": "encounter_policy",
+        "title": "CY2026 V28 Risk Adjustment Encounter Eligibility — Qualifying CPT Codes, Telehealth Rules, RAPS Deprecation",
+        "document_type": "encounter_policy", "payer_code": "CMS",
+        "content_text": """CY2026 Medicare Advantage V28 Encounter Eligibility — Complete Reference
+
+CRITICAL RULE: AUDIO-ONLY TELEHEALTH IS EXCLUDED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Audio-only telephone calls (phone visits without video) DO NOT qualify as encounters for V28 HCC risk adjustment under CY2026 CMS rules. This means:
+1. A provider cannot use an audio-only phone call to support a V28 HCC diagnosis for risk adjustment
+2. Even if the diagnosis is medically valid and documented, audio-only encounters are ineligible
+3. Telehealth MUST use synchronous video technology (audio + video simultaneously)
+4. Qualifying telehealth = same CPT codes as in-person + Place of Service 02 (telehealth off-site) or 10 (telehealth in patient's home), or modifier 95
+5. Plans should audit encounter data to remove audio-only submissions before annual reconciliation
+
+RAPS DEPRECATION — NON-PACE PLANS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Effective 1/1/2024: CMS no longer accepts Risk Adjustment Processing System (RAPS) submissions for new diagnoses from non-PACE MA plans
+- CY2026: 100% encounter data (EDR — Encounter Data Repository) required for non-PACE MA plans
+- Diagnoses submitted ONLY via RAPS (not EDR) after 1/1/2024 will NOT be counted in risk adjustment payment
+- PACE plans: RAPS still accepted for the V22 (90%) portion. EDR required for V28 (10%) portion.
+
+QUALIFYING ENCOUNTER TYPES AND CPT CODES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Physician Office E&M (most common):
+- 99202: New patient, straightforward/low complexity
+- 99203: New patient, low complexity
+- 99204: New patient, moderate complexity
+- 99205: New patient, high complexity
+- 99211: Established, minimal (CAUTION: nurse-only visits without physician often excluded)
+- 99212: Established, straightforward
+- 99213: Established, low complexity
+- 99214: Established, moderate complexity
+- 99215: Established, high complexity
+
+Inpatient Hospital:
+- 99221-99223: Initial hospital care (3 levels)
+- 99231-99233: Subsequent hospital care
+- 99238-99239: Hospital discharge day management
+
+Outpatient/ED:
+- 99281-99285: Emergency department E&M
+- 99241-99245: Office consultations
+
+Preventive/Wellness:
+- G0402: Welcome to Medicare (IPPE)
+- G0438: Initial Annual Wellness Visit (AWV)
+- G0439: Subsequent Annual Wellness Visit (AWV)
+- 99381-99397: Preventive medicine services (age-based)
+
+FQHC/RHC:
+- T1015: Comprehensive outpatient rehabilitation facility visit
+- G0466: FQHC visit, new patient
+- G0467: FQHC visit, established patient
+
+Telehealth (VIDEO-ENABLED ONLY):
+- Same CPT codes as in-person + Place of Service 02 or 10, OR modifier 95
+- Examples: 99214-95 (video office visit), G0439-02 (video AWV)
+- EXCLUDED: 99441-99443 (telephone E&M codes — audio only), 98966-98968 (telephone assessment)
+
+Behavioral Health:
+- 90837: Psychotherapy, 60 minutes
+- 90834: Psychotherapy, 45 minutes
+- 90832: Psychotherapy, 30 minutes
+- 90847: Family psychotherapy with patient present
+- 90853: Group psychotherapy
+- 90791: Psychiatric diagnostic evaluation
+- 99492-99494: Collaborative care management
+- H0001: Alcohol/drug assessment
+
+EXPRESSLY EXCLUDED (diagnoses from these encounters DO NOT count for V28 risk adjustment):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Audio-only telehealth: 99441 (5-10 min), 99442 (11-20 min), 99443 (21-30 min)
+2. Laboratory services alone: 80000-89999 series (no accompanying E&M)
+3. Diagnostic radiology/imaging alone: 70000-79999 series (no accompanying E&M)
+4. Pathology alone: 88000-88399 series
+5. Home health agency visits (G0151-G0168, 99500-99600) without face-to-face physician E&M
+6. Skilled nursing facility visits without qualifying physician/NPP E&M
+7. 99211 visits documented as nursing-only without physician involvement
+
+DOCUMENTATION REQUIREMENTS FOR QUALIFYING ENCOUNTERS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Each diagnosis submitted for risk adjustment must appear in the medical record
+- MEAT criteria: Monitor / Evaluate / Assess / Treat — at least one element required per diagnosis
+- Date of service must fall within the payment year (Jan 1 – Dec 31)
+- Provider must be eligible: physician (MD/DO), NP, PA, CNS, CRNA — with appropriate credentials
+- Face-to-face or video-enabled encounter required (audio-only excluded as above)
+
+TELEHEALTH PERMANENCE IN MA (POST-COVID):
+- Video telehealth E&M permanently covered in MA post-public health emergency
+- No geographic restrictions for MA members (unlike traditional Medicare)
+- Plans must cover telehealth services; members can use from home
+- STAR ratings: telehealth access counts toward access-to-care measures""",
+        "indication_text": "encounter eligibility telehealth audio-only RAPS EDR encounter data risk adjustment qualifying CPT codes face-to-face video V28 HCC",
+        "coding_text": "Qualifying: 99202-99215, 99221-99223, G0438, G0439, G0402, T1015; Telehealth: +modifier 95 or POS 02/10; Excluded: 99441-99443 (audio-only), labs 80000-89999, radiology 70000-79999",
+        "cpt_codes": json.dumps([
+            "99202","99203","99204","99205","99212","99213","99214","99215",
+            "99221","99222","99223","99231","99232","99233","99238","99239",
+            "G0402","G0438","G0439","G0466","G0467",
+            "99441","99442","99443",
+            "90837","90834","90832","90847","90791",
+            "99492","99493","99494"
+        ]),
+        "icd10_codes": json.dumps([]),
+        "specialties": json.dumps(["managed_care","compliance","risk_adjustment","telehealth","coding"]),
+        "confidence_score": 0.98, "effective_date": "2026-01-01",
+    },
+    # ── RADV Audit Intelligence Document ────────────────────────────────────────
+    {
+        "source_id": "CMS-RADV-ANNUAL-2026", "source_type": "audit_guidance",
+        "title": "CMS RADV Annual Audit Program — PY2020+ Requirements, MEAT Documentation, High-Risk HCCs (2026)",
+        "document_type": "audit_guidance", "payer_code": "CMS",
+        "content_text": """CMS Risk Adjustment Data Validation (RADV) — Annual Program CY2026
+
+PROGRAM OVERVIEW:
+CMS conducts annual RADV audits for ALL Medicare Advantage organizations (MAOs) for payment years 2020 and later. This replaced the previous sample-based program with a comprehensive annual audit.
+
+WHAT TRIGGERS A RADV FINDING:
+1. HCC coded without qualifying encounter in the payment year
+2. Diagnosis not supported by MEAT documentation in provider notes
+3. Audio-only telehealth used as the qualifying encounter
+4. Hierarchy violation: child HCC coded when parent HCC is present
+5. Diagnosis submitted via RAPS only (not EDR) for non-PACE plan
+6. Provider not eligible (e.g., lab technician, administrative staff)
+7. Date of service outside the payment year
+
+HIGHEST RADV RISK HCC CATEGORIES (V28 CY2026):
+- HCC 1 (HIV/AIDS): B20 — Requires infectious disease documentation
+- HCC 9/10 (Cancer): Oncology notes with stage, treatment plan, active/historical status
+- HCC 35/36 (Diabetes with complications): Must specify complication type (renal, neuro, ophtho)
+- HCC 52 (Dementia): Cognitive assessment, functional status, specialist note
+- HCC 85/86/87/88 (Heart failure): Echo results, EF%, specific type (systolic/diastolic)
+- HCC 96 (Atrial fibrillation): EKG or monitor report documenting arrhythmia
+- HCC 100 (Stroke/TIA): Imaging report (CT/MRI), neurologist note
+- HCC 111 (COPD): Spirometry (FEV1/FVC <0.70), pulmonologist note
+- HCC 134/135/136/137 (CKD): Labs showing GFR stage, nephrology documentation
+
+MEAT DOCUMENTATION CHECKLIST:
+For each HCC to survive RADV audit, medical record must contain:
+M — Monitor: tracking symptoms, disease progression, vital signs, lab trends
+E — Evaluate: assessing test results, reviewing imaging, diagnostic workup
+A — Assess: provider's clinical assessment of the condition, differential diagnosis
+T — Treat: active treatment plan, medications, referrals, procedures
+
+COMMON RADV DENIALS AND HOW TO PREVENT THEM:
+1. "Diagnosis not supported" → Add MEAT language to notes; avoid sign/symptom-only documentation
+2. "No qualifying encounter" → Confirm CPT code eligibility; avoid audio-only telehealth
+3. "Hierarchy violation" → Run V28 hierarchy check before submission; suppress child codes
+4. "Provider not eligible" → Verify rendering provider credentials; use physician oversight documentation
+5. "Date of service issue" → Reconcile encounter dates; ensure yearly recapture per payment year
+
+EXTRAPOLATION METHODOLOGY (PY2020+):
+CMS uses statistical extrapolation to calculate overpayments from RADV audit samples. Plans must maintain a robust documentation improvement program to minimize extrapolated financial risk.
+
+PROACTIVE COMPLIANCE STRATEGIES:
+1. Pre-submission V28 hierarchy audit (use /portal/v28/batch)
+2. Annual HCC reconciliation with provider education
+3. MEAT documentation training for coders and providers
+4. Encounter data validation before EDR submission
+5. Chase program for high-RAF members missing annual encounter""",
+        "indication_text": "RADV audit risk adjustment data validation MEAT documentation HCC hierarchy annual audit PY2020 compliance overpayment extrapolation",
+        "coding_text": "RADV audit: HCC 1 B20, HCC 35/36 E10/E11 complications, HCC 52 G30, HCC 85-88 I50.x, HCC 96 I48.x, HCC 100 I63.x, HCC 111 J44.x",
+        "cpt_codes": json.dumps([]),
+        "icd10_codes": json.dumps(["B20","E10.9","E11.9","G30.9","I50.9","I48.0","I63.9","J44.9"]),
+        "specialties": json.dumps(["managed_care","compliance","risk_adjustment","coding"]),
+        "confidence_score": 0.97, "effective_date": "2026-01-01",
     },
 ]
 

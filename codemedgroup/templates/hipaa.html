@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIPAA Compliance Statement — CodeMed Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#06080D;color:#E2E8F0;font-family:'Space Grotesk',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(#1E2435 1px,transparent 1px),linear-gradient(90deg,#1E2435 1px,transparent 1px);background-size:48px 48px;opacity:.2;pointer-events:none;z-index:0}
+.topbar{position:sticky;top:0;background:rgba(6,8,13,.9);backdrop-filter:blur(16px);border-bottom:1px solid #1E2435;padding:0 32px;height:56px;display:flex;align-items:center;justify-content:space-between;z-index:10}
+.topbar a{color:#94A3B8;text-decoration:none;font-size:13px;transition:color .15s}
+.topbar a:hover{color:#E2E8F0}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;text-decoration:none;color:inherit}
+.logo-icon{width:26px;height:26px;background:linear-gradient(135deg,#2563EB,#1D4ED8);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff}
+.content{position:relative;z-index:1;max-width:740px;margin:0 auto;padding:56px 24px 80px}
+.meta{font-size:11.5px;color:#64748B;font-family:'JetBrains Mono',monospace;margin-bottom:36px}
+h1{font-size:30px;font-weight:700;letter-spacing:-.6px;margin-bottom:10px}
+h2{font-size:17px;font-weight:600;letter-spacing:-.2px;margin:32px 0 10px;color:#CBD5E1}
+p{font-size:14px;color:#94A3B8;line-height:1.75;margin-bottom:14px}
+ul{margin:0 0 14px 20px}
+li{font-size:14px;color:#94A3B8;line-height:1.75;margin-bottom:5px}
+.divider{height:1px;background:#1E2435;margin:28px 0}
+strong{color:#E2E8F0;font-weight:600}
+a{color:#3B82F6;text-decoration:none}
+a:hover{text-decoration:underline}
+.badge-row{display:flex;flex-wrap:wrap;gap:10px;margin:24px 0}
+.badge{display:inline-flex;align-items:center;gap:7px;background:#0C0F17;border:1px solid #1E2435;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:500}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:#10B981;flex-shrink:0}
+.badge-dot.yellow{background:#F59E0B}
+.badge-dot.blue{background:#3B82F6}
+.baa-card{background:#0C0F17;border:1px solid #252D40;border-radius:12px;padding:24px;margin:28px 0}
+.baa-card h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.baa-card p{margin:0;font-size:13.5px}
+table{width:100%;border-collapse:collapse;margin:14px 0 24px}
+th{text-align:left;font-size:11px;font-weight:600;color:#64748B;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid #1E2435}
+td{font-size:13.5px;color:#94A3B8;padding:10px 12px;border-bottom:1px solid #111520;vertical-align:top}
+td strong{font-size:13px}
+.yes{color:#10B981;font-weight:600}
+.no{color:#EF4444;font-weight:600}
+.partial{color:#F59E0B;font-weight:600}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/" class="logo"><div class="logo-icon">CMG</div>CodeMed Group</a>
+  <a href="/">← Back to home</a>
+</div>
+<div class="content">
+  <p class="meta">Last updated: March 2025</p>
+  <h1>HIPAA Compliance Statement</h1>
+  <p>This document describes CodeMed Group's approach to HIPAA compliance, the data we handle, how we protect it, and what is required from customers who may handle Protected Health Information (PHI) in connection with our platform.</p>
+
+  <div class="badge-row">
+    <div class="badge"><span class="badge-dot"></span> BAA Available on Growth &amp; Enterprise</div>
+    <div class="badge"><span class="badge-dot blue"></span> HTTPS / TLS 1.2+ Enforced</div>
+    <div class="badge"><span class="badge-dot yellow"></span> No PHI by Default</div>
+    <div class="badge"><span class="badge-dot"></span> Audit Logging Enabled</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Platform Classification</h2>
+  <p>CodeMed Group is a <strong>medical billing intelligence and HCC risk adjustment platform</strong>. The platform is designed to answer regulatory and coding questions — it is <em>not</em> an EHR, a clinical documentation system, or a claims clearinghouse. In its default configuration, <strong>the platform does not receive, store, or process PHI</strong>.</p>
+  <p>Under HIPAA, CodeMed Group may qualify as a <strong>Business Associate</strong> when a Covered Entity or another Business Associate uses the platform in a manner that involves PHI — for example, by submitting patient-specific diagnosis codes or member identifiers in API queries. In such cases, a BAA is required before use.</p>
+
+  <h2>What Constitutes PHI on This Platform</h2>
+  <p>The following would constitute PHI if submitted through our platform and should only be sent under a signed BAA:</p>
+  <ul>
+    <li>Patient names, initials, or other direct identifiers</li>
+    <li>Medicare Beneficiary Identifiers (MBI) or Health Insurance Claim Numbers (HICN)</li>
+    <li>Dates of birth, admission dates, discharge dates linked to individuals</li>
+    <li>Diagnosis codes (ICD-10) tied to a specific, identifiable patient</li>
+    <li>Member IDs, Claim IDs, or other payer-assigned identifiers linked to individuals</li>
+    <li>Geographic data smaller than state level linked to individuals</li>
+  </ul>
+  <p><strong>Coding questions without patient identifiers are not PHI.</strong> For example, "Does F32.9 qualify for V28 HCC mapping?" is not PHI. "Patient John Doe, DOB 1942-03-15, MBI 1EG4-TE5-MK72, has F32.9 — does this map to V28 HCC?" contains PHI and requires a BAA.</p>
+
+  <h2>Business Associate Agreement (BAA)</h2>
+  <div class="baa-card">
+    <h3>BAA Availability by Plan</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>BAA Available</th>
+          <th>PHI Permitted</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Demo (Free)</strong></td>
+          <td class="no">No</td>
+          <td class="no">No</td>
+          <td>Research and testing only. No PHI permitted.</td>
+        </tr>
+        <tr>
+          <td><strong>Starter ($500/mo)</strong></td>
+          <td class="no">No</td>
+          <td class="no">No</td>
+          <td>Coding guidance workflows only. No PHI permitted.</td>
+        </tr>
+        <tr>
+          <td><strong>Growth ($2,500/mo)</strong></td>
+          <td class="yes">Yes</td>
+          <td class="partial">With BAA</td>
+          <td>BAA available upon request before submitting PHI.</td>
+        </tr>
+        <tr>
+          <td><strong>Enterprise ($10K+/mo)</strong></td>
+          <td class="yes">Yes</td>
+          <td class="yes">Yes (BAA required)</td>
+          <td>BAA included in Enterprise agreement. Custom DPA available.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>To request a BAA, contact us at <a href="mailto:compliance@codemedgroup.com">compliance@codemedgroup.com</a> or via our <a href="/contact">contact form</a>. Do not submit PHI before receiving a signed BAA.</p>
+  </div>
+
+  <h2>Technical Safeguards</h2>
+  <ul>
+    <li><strong>Encryption in transit:</strong> All connections use HTTPS with TLS 1.2 or higher. HTTP requests are redirected to HTTPS.</li>
+    <li><strong>Encryption at rest:</strong> Data stored in SQLite databases on Railway infrastructure is encrypted at the filesystem level.</li>
+    <li><strong>Access controls:</strong> API keys are hashed (SHA-256) before storage. Passwords are hashed using bcrypt. Session tokens are server-side and expire on logout.</li>
+    <li><strong>Audit logging:</strong> All API requests, including query text, API key identifier, IP address, timestamp, and response latency, are logged in the audit_log table for up to 90 days.</li>
+    <li><strong>Minimum necessary:</strong> The platform does not request or require PHI for its core functions. Users are instructed not to submit PHI without a BAA.</li>
+  </ul>
+
+  <h2>Subprocessors and Third-Party Data Sharing</h2>
+  <p>Query text submitted to the CodeMed Group platform may be forwarded to the following subprocessors to generate AI responses:</p>
+  <ul>
+    <li><strong>Anthropic PBC:</strong> Query text is sent to Anthropic's Claude API to generate coding and compliance guidance. Anthropic's data processing terms govern their handling. Under default API terms, Anthropic does not train on API inputs. For customers requiring formal data processing agreements with Anthropic, please contact us.</li>
+    <li><strong>Railway (Infrastructure):</strong> Application hosting and database storage. Data residency: United States.</li>
+  </ul>
+
+  <h2>Administrative Safeguards</h2>
+  <ul>
+    <li>Workforce training on PHI handling and HIPAA obligations</li>
+    <li>Designated Privacy Officer responsible for compliance oversight</li>
+    <li>Incident response procedures for potential PHI breaches</li>
+    <li>Vendor assessment process for evaluating subprocessor security posture</li>
+    <li>Annual review of this compliance statement and technical controls</li>
+  </ul>
+
+  <h2>Breach Notification</h2>
+  <p>In the event of a breach involving PHI processed under a BAA, CodeMed Group will notify the affected Covered Entity within 60 days of discovery, as required under 45 CFR §164.410. Notification will include the nature of the PHI involved, the persons affected, the steps taken to mitigate harm, and contact information for further inquiry.</p>
+
+  <h2>Your Responsibilities</h2>
+  <p>As a customer, you are responsible for:</p>
+  <ul>
+    <li>Ensuring you have a signed BAA with CodeMed Group before submitting any PHI</li>
+    <li>Training your staff not to submit PHI through the Demo or Starter tiers</li>
+    <li>Maintaining the confidentiality of your API keys and login credentials</li>
+    <li>Promptly reporting suspected unauthorized access to <a href="mailto:security@codemedgroup.com">security@codemedgroup.com</a></li>
+    <li>Complying with your own HIPAA obligations as a Covered Entity or Business Associate</li>
+  </ul>
+
+  <h2>Contact</h2>
+  <p>Compliance and HIPAA questions: <a href="mailto:compliance@codemedgroup.com">compliance@codemedgroup.com</a></p>
+  <p>Security incidents: <a href="mailto:security@codemedgroup.com">security@codemedgroup.com</a></p>
+  <p>General inquiries: <a href="/contact">contact form</a></p>
+</div>
+</body>
+</html>

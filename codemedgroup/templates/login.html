@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign In — CodeMed Group</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--border2:#252D40;--blue:#2563EB;--cyan:#06B6D4;--green:#10B981;--red:#EF4444;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.25;pointer-events:none;z-index:0}
+.glow{position:fixed;top:20%;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(37,99,235,.12) 0%,transparent 70%);pointer-events:none;z-index:0}
+.card{position:relative;z-index:1;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:40px;width:100%;max-width:400px;margin:24px}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;justify-content:center}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--blue),#1D4ED8);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;box-shadow:0 0 16px rgba(37,99,235,.4)}
+.logo-text{font-weight:700;font-size:16px;letter-spacing:-.3px}
+h1{font-size:22px;font-weight:700;letter-spacing:-.4px;margin-bottom:6px;text-align:center}
+.sub{font-size:13.5px;color:var(--muted);text-align:center;margin-bottom:28px}
+.form-group{margin-bottom:16px}
+label{display:block;font-size:11.5px;font-weight:600;color:var(--subtle);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;padding:10px 14px;outline:none;transition:border-color .15s}
+input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.btn{display:block;width:100%;padding:11px;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;border:none;text-align:center;transition:all .15s;text-decoration:none;margin-top:20px}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:#1D4ED8;box-shadow:0 0 20px rgba(37,99,235,.4)}
+.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--red);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
+.divider{height:1px;background:var(--border);margin:22px 0;position:relative}
+.divider span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);padding:0 10px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.link-row{text-align:center;font-size:13px;color:var(--muted);margin-top:18px}
+.link-row a{color:var(--blue-glow, #3B82F6);text-decoration:none;font-weight:500}
+.link-row a:hover{text-decoration:underline}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-size:12.5px;position:absolute;top:24px;left:24px;z-index:2;transition:color .15s}
+.back:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<a href="/" class="back">← Back to home</a>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">CMG</div>
+    <span class="logo-text">CodeMed Group</span>
+  </div>
+  <h1>Welcome back</h1>
+  <p class="sub">Sign in to your portal</p>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="/login">
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="you@company.com" required autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn btn-primary">Sign In →</button>
+  </form>
+
+  <div class="divider"><span>or</span></div>
+  <div class="link-row">
+    Don't have an account? <a href="/signup">Create one free →</a>
+  </div>
+  <div class="link-row" style="margin-top:10px">
+    <a href="/contact">Need help accessing your account?</a>
+  </div>
+</div>
+</body>
+</html>

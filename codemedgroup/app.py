@@ -1,13 +1,15 @@
 """
-CodeMed Group Platform
+CodeMed Group Platform  v2.0
 Layer 2: Regulatory Intelligence API
 Layer 1: NexusAuth RCM Portal
+Layer 0: Public Landing + Auth
 """
 import os, re, json, sqlite3, hashlib, secrets, time, logging
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from flask import Flask, request, jsonify, render_template, g
+from flask import Flask, request, jsonify, render_template, g, session, redirect, url_for, flash
+from werkzeug.security import generate_password_hash, check_password_hash
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("codemedgroup")
@@ -103,12 +105,12 @@ CORPUS: 1,307+ CMS LCD/NCD policies, payer clinical policies, HIPAA compliance d
 CY2026 RISK ADJUSTMENT & PAYMENT CONTEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MODEL & PHASE-IN:
-- NON-PACE MA PLANS: 100% CMS-HCC V28 (2024 model) as of CY2026. Encounter data + FFS only; RAPS no longer accepted for new diagnoses.
-  MOR/MMR: [2024 CMS-HCC V28 M] [2026 RxHCC V08 6] [2023 ESRD V24 L]
-- PACE PLANS: 10% V28 + 90% V22 (2017 model). RAPS still accepted for V22 portion.
+- NON-PACE MA PLANS: 100% CMS-HCC V28 (2024 model) as of CY2026. Encounter data (EDR) + FFS only. RAPS no longer accepted for ANY new diagnoses effective 1/1/2024. If a non-PACE plan submits via RAPS only, the diagnosis will NOT count for risk adjustment.
+  MOR/MMR record types: [2024 CMS-HCC V28 M] [2026 RxHCC V08 6] [2023 ESRD V24 L]
+- PACE PLANS: 10% V28 + 90% V22 (2017 model). RAPS still accepted for the V22 (90%) portion only. EDR required for V28 (10%) portion.
   MOR/MMR adds: [2017 CMS-HCC V22 K] [2019 ESRD V21 B] [2026 RxHCC V08 6/7]
 - V28 EXPANSION: 115 payment HCCs (up from 86 in V24); 7,770 ICD-10 codes mapped (down from 9,797 — 2,290 removed for clinical accuracy)
-- HIERARCHY ENFORCEMENT: V28 automatically suppresses child HCCs when a parent is present. Submitting both is a RADV audit risk. Always bill the most specific code.
+- HIERARCHY ENFORCEMENT: V28 automatically suppresses child HCCs when a parent is present. Submitting both is a RADV audit risk. Always code and document the most specific condition.
 - MEAT EVIDENCE REQUIRED: Each coded HCC must be supported by Monitor/Evaluate/Assess/Treat evidence in the provider's note for the payment year.
 
 NORMALIZATION & ADJUSTMENTS (2026):
@@ -119,9 +121,32 @@ NORMALIZATION & ADJUSTMENTS (2026):
 - Growth rate increased from 5.93% Advance Notice due to inclusion of Q4 2024 FFS expenditure data
 - Medical education costs: 100% technical adjustment applied in 2026 (3-year phase-in complete)
 
-ENCOUNTER FILTERING:
-- QUALIFYING: Physician office E&M, inpatient hospital, outpatient hospital, FQHC/RHC, video-enabled telehealth with eligible CPT
-- EXCLUDED: Audio-only telehealth, labs/radiology/pathology alone, home health/SNF without face-to-face CPT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ENCOUNTER FILTERING — CRITICAL RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AUDIO-ONLY TELEHEALTH — EXPRESSLY EXCLUDED:
+- Audio-only phone calls CANNOT support V28 HCC diagnoses for risk adjustment. PERIOD.
+- If a patient has a phone-only visit and the provider documents a diagnosis, that encounter DOES NOT qualify for risk adjustment — even if the diagnosis is otherwise valid.
+- Telehealth MUST be synchronous audio + video (e.g., with CPT modifier 95 or place of service 02/10)
+- Common question: "Is audio-only telehealth valid for V28 risk adjustment?" → Answer: NO. Audio-only is explicitly excluded under CY2026 CMS encounter eligibility rules.
+
+QUALIFYING ENCOUNTER TYPES:
+- Physician office E&M: 99202–99215 (new/established patient office visits)
+- Inpatient hospital: 99221–99223 (initial), 99231–99233 (subsequent), 99238–99239 (discharge)
+- Outpatient hospital E&M: 99241–99245 (consultations), 99281–99285 (ED)
+- Annual Wellness Visits: G0438 (initial AWV), G0439 (subsequent AWV)
+- Welcome to Medicare: G0402
+- FQHC/RHC: T1015 (per-visit), G0466 (FQHC new patient), G0467 (FQHC established)
+- Video-enabled telehealth: Same CPT codes as above + modifier 95 (synchronous telecommunications)
+- Behavioral health: 90837 (psychotherapy 60 min), 90832 (30 min), 90834 (45 min), 90847 (family therapy)
+
+EXCLUDED ENCOUNTER TYPES (diagnosis does NOT count for risk adjustment):
+- Audio-only telehealth (phone calls): EXCLUDED even with valid CPT
+- Labs/pathology alone (80000–89999 series): EXCLUDED
+- Radiology/imaging alone (70000–79999): EXCLUDED
+- Home health without face-to-face E&M CPT: EXCLUDED
+- SNF visits without face-to-face physician E&M CPT: EXCLUDED
+- 99211 (nurse-only visit without physician involvement): EXCLUDED
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CPT CLINICAL CODING GUIDELINES
@@ -296,14 +321,27 @@ STOPWORDS = {"the","and","for","with","not","are","was","has","per","its",
              "when","what","does","how","can","get","use","all","any","its"}
 
 def build_fts_query(query: str) -> str:
+    """Build FTS5 BM25 query from natural language.
+    Requires first 3 meaningful tokens (AND) for precision; OR-expands the rest for recall.
+    Reduced from 6 to 3 required AND tokens — prevents over-restrictive misses on long queries.
+    """
     cleaned = re.sub(r'\b[A-Z]\d{2,4}(?:\.\d{1,4})?\b', ' ', query, flags=re.IGNORECASE)
     cleaned = re.sub(r'\b\d{5}\b', ' ', cleaned)
-    tokens = [t.strip('.,;:()[]"\'') for t in cleaned.split()
-              if len(t.strip('.,;:()[]"\'')) >= 3
-              and t.lower().strip('.,;:()[]"\'') not in STOPWORDS]
+    tokens = list(dict.fromkeys(  # deduplicate, preserve order
+        t.strip('.,;:()[]"\'').lower() for t in cleaned.split()
+        if len(t.strip('.,;:()[]"\'')) >= 3
+        and t.lower().strip('.,;:()[]"\'') not in STOPWORDS
+    ))
     if not tokens:
         return None
-    return ' AND '.join(tokens[:6])
+    if len(tokens) <= 2:
+        return ' AND '.join(tokens)
+    # Require first 3 terms; OR-expand remaining for recall (BM25 ranks by relevance)
+    required = ' AND '.join(tokens[:3])
+    optional = tokens[3:7]
+    if optional:
+        return f"({required}) OR {' OR '.join(optional)}"
+    return required
 
 # ── Corpus search (3-tier: code-aware → FTS5 → LIKE) ─────────
 def search_corpus(query: str, limit: int = 5, doc_type: str = None, payer: str = None) -> list:
@@ -465,6 +503,42 @@ def v28_lookup(code: str) -> dict:
         "v28_change_note": r.get("v28_change_note"), "clinical_rationale": r.get("clinical_rationale"),
     }
 
+def build_v28_chat_context(icd_codes: list, max_codes: int = 5) -> str:
+    """Rich V28 injection for AI chat — includes upgrade paths, change notes, tier.
+    Makes the AI sound like a domain expert when ICD codes are mentioned.
+    """
+    if not icd_codes:
+        return ""
+    lines = []
+    for code in icd_codes[:max_codes]:
+        r = v28_lookup(code)
+        status   = r["status"]
+        hcc      = r.get("v28_hcc") or "N/A"
+        v24_hcc  = r.get("v24_hcc") or "N/A"
+        tier     = r.get("payment_tier", "standard")
+        desc     = (r.get("description") or "")[:55]
+
+        if status == "VALID":
+            line = f"  {code} ({desc}): ✓ VALID → V28 HCC {hcc} | tier={tier}"
+        elif status == "REJECTED":
+            line = f"  {code} ({desc}): ✗ V28 REJECTED (was V24 HCC {v24_hcc}) — **REVENUE RISK**"
+            upgrades = r.get("upgrade_suggestions", [])
+            if upgrades:
+                top = upgrades[0]
+                up_desc = (top.get("description") or "")[:45]
+                line += f"\n    → Upgrade path: {top['icd10_code']} ({up_desc}) → HCC {top['v28_hcc']} [{top.get('payment_tier','std')}]"
+        elif status == "NOT_MAPPED":
+            line = f"  {code} ({desc}): NOT MAPPED to any HCC in V28"
+        else:
+            line = f"  {code}: NOT FOUND in V28 corpus"
+
+        note = r.get("v28_change_note")
+        if note:
+            line += f"\n    CMS note: {note[:110]}"
+        lines.append(line)
+
+    return "\nV28 HCC Impact for ICD-10 codes in query:\n" + "\n".join(lines) + "\n"
+
 def build_appeal_v28_context(icd_codes: list) -> str:
     if not icd_codes:
         return ""
@@ -525,14 +599,9 @@ def api_query():
     docs = search_corpus(q, limit=5, doc_type=data.get("type"), payer=data.get("payer"))
     ctx  = build_rag_context(docs)
 
-    # Auto-inject V28 status for any ICD-10 codes in the query
-    codes = extract_codes(q)
-    v28_ctx = ""
-    if codes["icd10"]:
-        v28_results = [v28_lookup(c) for c in codes["icd10"][:5]]
-        v28_lines = [f"  {r['code']}: {r['status']} (HCC {r.get('v28_hcc','N/A')}, tier={r.get('payment_tier','N/A')})"
-                     for r in v28_results]
-        v28_ctx = "\nV28 HCC Status for codes in query:\n" + "\n".join(v28_lines) + "\n"
+    # Auto-inject rich V28 context for any ICD-10 codes in the query
+    codes   = extract_codes(q)
+    v28_ctx = build_v28_chat_context(codes["icd10"])
 
     # Auto-inject HIPAA context if relevant
     hipaa_ctx = ""
@@ -966,34 +1035,57 @@ def api_appeals():
     return jsonify({"letter":letter,"sources":[{"id":d["source_id"],"title":d["title"]} for d in docs]})
 
 # ════════════════════════════════════════════════════════════════
+# AUTH — Optional (enforced when REQUIRE_AUTH=true in env)
+# ════════════════════════════════════════════════════════════════
+
+REQUIRE_AUTH = os.environ.get("REQUIRE_AUTH", "false").lower() == "true"
+
+def ensure_users_table():
+    """Create users table if it doesn't exist (safe to call on every startup)."""
+    db = get_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            email        TEXT NOT NULL UNIQUE,
+            name         TEXT NOT NULL,
+            password     TEXT NOT NULL,
+            role         TEXT DEFAULT 'user',
+            active       INTEGER DEFAULT 1,
+            created_at   TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    db.commit()
+
+def login_required(f):
+    """Redirect to /login if REQUIRE_AUTH is enabled and user is not authenticated."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if REQUIRE_AUTH and not session.get("user_id"):
+            return redirect(url_for("login_page", next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+# ════════════════════════════════════════════════════════════════
 # LAYER 1: PORTAL (internal — no API key needed)
 # ════════════════════════════════════════════════════════════════
 
-@app.route("/")
-def portal_index():
-    db = get_db()
-    docs  = db.execute("SELECT COUNT(*) c FROM documents WHERE status='active'").fetchone()
-    v28   = db.execute("SELECT COUNT(*) c, SUM(CASE WHEN v28_pays=0 AND v24_pays=1 THEN 1 ELSE 0 END) rej FROM v28_hcc_codes").fetchone()
-    keys  = db.execute("SELECT COUNT(*) c FROM api_keys WHERE active=1").fetchone()
-    calls = db.execute("SELECT COUNT(*) c FROM audit_log WHERE action='api_request'").fetchone()
-    return render_template("dashboard.html",
-        doc_count=docs["c"], v28_total=v28["c"],
-        v28_rejected=v28["rej"] or 0,
-        api_keys=keys["c"], api_calls=calls["c"])
-
 @app.route("/chat")
+@login_required
 def portal_chat():
     return render_template("chat.html")
 
 @app.route("/v28")
+@login_required
 def portal_v28():
     return render_template("v28.html")
 
 @app.route("/appeals")
+@login_required
 def portal_appeals():
     return render_template("appeals.html")
 
 @app.route("/docs")
+@login_required
 def portal_docs():
     db   = get_db()
     keys = db.execute("SELECT id, customer_name, tier, monthly_usage, last_used, created_at FROM api_keys WHERE active=1 ORDER BY created_at DESC").fetchall()
@@ -1021,13 +1113,8 @@ def portal_chat_post():
     docs = search_corpus(q, limit=5)
     ctx  = build_rag_context(docs)
 
-    codes = extract_codes(q)
-    v28_ctx = ""
-    if codes["icd10"]:
-        v28_results = [v28_lookup(c) for c in codes["icd10"][:5]]
-        v28_lines = [f"  {r['code']}: {r['status']} (HCC {r.get('v28_hcc','N/A')}, tier={r.get('payment_tier','N/A')})"
-                     for r in v28_results]
-        v28_ctx = "\nV28 HCC Status for codes in query:\n" + "\n".join(v28_lines) + "\n"
+    codes   = extract_codes(q)
+    v28_ctx = build_v28_chat_context(codes["icd10"])
 
     hipaa_ctx = ""
     if is_hipaa_query(q):
@@ -1061,10 +1148,12 @@ def portal_v28_batch():
         "not_found":len(codes)-len(valid)-len(rejected),"results":results})
 
 @app.route("/raf")
+@login_required
 def portal_raf():
     return render_template("raf.html")
 
 @app.route("/radv")
+@login_required
 def portal_radv():
     return render_template("radv.html")
 
@@ -1270,6 +1359,7 @@ def portal_appeals_post():
 
 
 @app.route("/member")
+@login_required
 def portal_member():
     return render_template("member.html")
 
@@ -1368,6 +1458,141 @@ def portal_member_risk_profile():
         "member": {"age": age, "sex": sex, "plan_type": plan},
     })
 
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if session.get("user_id"):
+        return redirect(url_for("portal_dashboard"))
+    error = None
+    if request.method == "POST":
+        email    = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        try:
+            ensure_users_table()
+            db  = get_db()
+            row = db.execute("SELECT * FROM users WHERE email=? AND active=1", (email,)).fetchone()
+            if row and check_password_hash(row["password"], password):
+                session.permanent = True
+                session["user_id"]   = row["id"]
+                session["user_name"] = row["name"]
+                session["user_email"] = row["email"]
+                next_url = request.args.get("next", "/dashboard")
+                return redirect(next_url)
+            error = "Invalid email or password."
+        except Exception as e:
+            logger.error(f"Login error: {e}")
+            error = "Login failed. Please try again."
+    return render_template("login.html", error=error)
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup_page():
+    if session.get("user_id"):
+        return redirect(url_for("portal_dashboard"))
+    error = None
+    if request.method == "POST":
+        name     = request.form.get("name", "").strip()
+        email    = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        company  = request.form.get("company", "").strip()
+        if not name or not email or not password:
+            error = "Name, email, and password are required."
+        elif len(password) < 8:
+            error = "Password must be at least 8 characters."
+        else:
+            try:
+                ensure_users_table()
+                db = get_db()
+                db.execute(
+                    "INSERT INTO users (email, name, password) VALUES (?,?,?)",
+                    (email, name, generate_password_hash(password))
+                )
+                db.commit()
+                row = db.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+                session["user_id"]    = row["id"]
+                session["user_name"]  = row["name"]
+                session["user_email"] = row["email"]
+                return redirect(url_for("portal_dashboard"))
+            except sqlite3.IntegrityError:
+                error = "An account with that email already exists."
+            except Exception as e:
+                logger.error(f"Signup error: {e}")
+                error = "Account creation failed. Please try again."
+    return render_template("signup.html", error=error)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("landing"))
+
+# ════════════════════════════════════════════════════════════════
+# PUBLIC PAGES — Landing, Compliance, Contact
+# ════════════════════════════════════════════════════════════════
+
+@app.route("/")
+def landing():
+    return render_template("landing.html")
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
+
+@app.route("/terms")
+def terms():
+    return render_template("terms.html")
+
+@app.route("/hipaa")
+def hipaa_page():
+    return render_template("hipaa.html")
+
+@app.route("/contact", methods=["GET", "POST"])
+def contact():
+    submitted = False
+    if request.method == "POST":
+        # Log the inquiry; in production wire to email / CRM
+        name    = request.form.get("name","").strip()
+        email   = request.form.get("email","").strip()
+        company = request.form.get("company","").strip()
+        message = request.form.get("message","").strip()
+        plan    = request.form.get("plan","general")
+        db = get_db()
+        try:
+            db.execute(
+                "INSERT INTO audit_log(action,resource_type,user_session,ip_address,query_text) VALUES(?,?,?,?,?)",
+                ("contact_form", "lead", email, request.remote_addr,
+                 f"{name} | {company} | {plan} | {message[:200]}")
+            )
+            db.commit()
+        except Exception:
+            pass
+        submitted = True
+        logger.info(f"Contact form: {name} <{email}> [{company}] — {plan}")
+    return render_template("contact.html", submitted=submitted)
+
+# ════════════════════════════════════════════════════════════════
+# PORTAL — Rename / to /dashboard (add login_required gate)
+# ════════════════════════════════════════════════════════════════
+
+@app.route("/dashboard")
+@login_required
+def portal_dashboard():
+    db = get_db()
+    docs  = db.execute("SELECT COUNT(*) c FROM documents WHERE status='active'").fetchone()
+    v28   = db.execute("SELECT COUNT(*) c, SUM(CASE WHEN v28_pays=0 AND v24_pays=1 THEN 1 ELSE 0 END) rej FROM v28_hcc_codes").fetchone()
+    keys  = db.execute("SELECT COUNT(*) c FROM api_keys WHERE active=1").fetchone()
+    calls = db.execute("SELECT COUNT(*) c FROM audit_log WHERE action='api_request'").fetchone()
+    return render_template("dashboard.html",
+        doc_count=docs["c"], v28_total=v28["c"],
+        v28_rejected=v28["rej"] or 0,
+        api_keys=keys["c"], api_calls=calls["c"])
+
+# ── Error handlers ─────────────────────────────────────────────
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("404.html"), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"500 error: {e}")
+    return render_template("500.html"), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
