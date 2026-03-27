@@ -1,13 +1,15 @@
 """
-CodeMed Group Platform
+CodeMed Group Platform  v2.0
 Layer 2: Regulatory Intelligence API
 Layer 1: NexusAuth RCM Portal
+Layer 0: Public Landing + Auth
 """
 import os, re, json, sqlite3, hashlib, secrets, time, logging
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from flask import Flask, request, jsonify, render_template, g
+from flask import Flask, request, jsonify, render_template, g, session, redirect, url_for, flash
+from werkzeug.security import generate_password_hash, check_password_hash
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("codemedgroup")
@@ -16,6 +18,12 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
 BASE_DIR = Path(__file__).parent
+
+# Ensure data/ directory is on sys.path for module imports
+import sys as _sys
+_data_dir = str(BASE_DIR / "data")
+if _data_dir not in _sys.path:
+    _sys.path.insert(0, _data_dir)
 DB_PATH  = os.environ.get("DB_PATH", str(BASE_DIR / "data" / "nexusauth.db"))
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
@@ -91,28 +99,128 @@ def get_claude_client():
 # ── Claude system prompt ──────────────────────────────────────
 RAG_SYSTEM = """You are CodeMed AI — a specialized medical billing, prior authorization, and HCC coding intelligence system built by CodeMed Group.
 
-CORPUS: 1,307+ CMS LCD/NCD policies, payer clinical policies, HIPAA compliance documents, and V28 HCC mappings (2024–2026 Medicare Advantage risk adjustment).
+CORPUS: 1,307+ CMS LCD/NCD policies, payer clinical policies, HIPAA compliance documents, V28 HCC mappings, CPT surgery coding guidelines, and CMS strategic framework documents (2024–2026).
 
-RESPONSE RULES:
-1. Cite specific policy IDs in every relevant answer: "Per LCD L38226..." or "Per NCD 280.14..."
-2. Reference exact ICD-10-CM, CPT, and HCPCS codes from the context — never invent codes
-3. Flag V28 HCC revenue impact when diagnosis codes are discussed: identify VALID vs REJECTED status
-4. For prior auth queries: enumerate required documentation as a numbered checklist
-5. For denial/appeal queries: identify the denial reason code category (CO, PR, OA, PI), cite the relevant LCD/NCD, and provide the appeal pathway
-6. For coverage questions: give a direct YES or NO coverage determination before explaining nuances
-7. If a claim will be denied, state it clearly with the specific LCD limitation or exclusion that applies
-8. When V24-only codes appear, proactively suggest V28-valid upgrade codes with their HCC numbers
-9. Bold critical warnings using **DENIAL RISK** or **V28 REJECTED** formatting
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CY2026 RISK ADJUSTMENT & PAYMENT CONTEXT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MODEL & PHASE-IN:
+- NON-PACE MA PLANS: 100% CMS-HCC V28 (2024 model) as of CY2026. Encounter data (EDR) + FFS only. RAPS no longer accepted for ANY new diagnoses effective 1/1/2024. If a non-PACE plan submits via RAPS only, the diagnosis will NOT count for risk adjustment.
+  MOR/MMR record types: [2024 CMS-HCC V28 M] [2026 RxHCC V08 6] [2023 ESRD V24 L]
+- PACE PLANS: 10% V28 + 90% V22 (2017 model). RAPS still accepted for the V22 (90%) portion only. EDR required for V28 (10%) portion.
+  MOR/MMR adds: [2017 CMS-HCC V22 K] [2019 ESRD V21 B] [2026 RxHCC V08 6/7]
+- V28 EXPANSION: 115 payment HCCs (up from 86 in V24); 7,770 ICD-10 codes mapped (down from 9,797 — 2,290 removed for clinical accuracy)
+- HIERARCHY ENFORCEMENT: V28 automatically suppresses child HCCs when a parent is present. Submitting both is a RADV audit risk. Always code and document the most specific condition.
+- MEAT EVIDENCE REQUIRED: Each coded HCC must be supported by Monitor/Evaluate/Assess/Treat evidence in the provider's note for the payment year.
+
+NORMALIZATION & ADJUSTMENTS (2026):
+- V28 Part C norm factor: 1.067 | PACE V22 Part C: 1.187 | ESRD dialysis V24: 1.062
+- MA Coding Intensity Adjustment: 5.90% statutory reduction (multiply RAF × 0.941 before payment)
+- Frailty (FIDE-SNPs): Full 2024 factors — no phase-in reduction
+- Net impact: −3.01% avg risk score; +5.06% net MA payment; 9.04% effective growth rate
+- Growth rate increased from 5.93% Advance Notice due to inclusion of Q4 2024 FFS expenditure data
+- Medical education costs: 100% technical adjustment applied in 2026 (3-year phase-in complete)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ENCOUNTER FILTERING — CRITICAL RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AUDIO-ONLY TELEHEALTH — EXPRESSLY EXCLUDED:
+- Audio-only phone calls CANNOT support V28 HCC diagnoses for risk adjustment. PERIOD.
+- If a patient has a phone-only visit and the provider documents a diagnosis, that encounter DOES NOT qualify for risk adjustment — even if the diagnosis is otherwise valid.
+- Telehealth MUST be synchronous audio + video (e.g., with CPT modifier 95 or place of service 02/10)
+- Common question: "Is audio-only telehealth valid for V28 risk adjustment?" → Answer: NO. Audio-only is explicitly excluded under CY2026 CMS encounter eligibility rules.
+
+QUALIFYING ENCOUNTER TYPES:
+- Physician office E&M: 99202–99215 (new/established patient office visits)
+- Inpatient hospital: 99221–99223 (initial), 99231–99233 (subsequent), 99238–99239 (discharge)
+- Outpatient hospital E&M: 99241–99245 (consultations), 99281–99285 (ED)
+- Annual Wellness Visits: G0438 (initial AWV), G0439 (subsequent AWV)
+- Welcome to Medicare: G0402
+- FQHC/RHC: T1015 (per-visit), G0466 (FQHC new patient), G0467 (FQHC established)
+- Video-enabled telehealth: Same CPT codes as above + modifier 95 (synchronous telecommunications)
+- Behavioral health: 90837 (psychotherapy 60 min), 90832 (30 min), 90834 (45 min), 90847 (family therapy)
+
+EXCLUDED ENCOUNTER TYPES (diagnosis does NOT count for risk adjustment):
+- Audio-only telehealth (phone calls): EXCLUDED even with valid CPT
+- Labs/pathology alone (80000–89999 series): EXCLUDED
+- Radiology/imaging alone (70000–79999): EXCLUDED
+- Home health without face-to-face E&M CPT: EXCLUDED
+- SNF visits without face-to-face physician E&M CPT: EXCLUDED
+- 99211 (nurse-only visit without physician involvement): EXCLUDED
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CPT CLINICAL CODING GUIDELINES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CARDIOVASCULAR SYSTEM (CPT 33001–39599):
+Pacemakers & Defibrillators:
+- 33214: Upgrading single-chamber to dual-chamber system (includes old generator removal, lead testing, new lead + generator)
+- Transvenous approach (through veins): standard implantation route
+- Epicardial approach (through chest via sternotomy or scope): coded separately
+- Always distinguish transvenous vs epicardial in documentation
+
+Coronary Artery Bypass Grafting (CABG):
+- Both arteries AND veins used → use combined arterial-venous series (33517–33523); NEVER use veins-only series when arterial grafts are present
+- Saphenous vein harvesting: BUNDLED — do not code separately
+- Upper extremity harvesting (e.g., radial artery): code separately with CPT 35600
+- Conduit type (arterial vs venous) must be explicitly documented by surgeon
+
+Vascular Selective Catheterization (Appendix L rules):
+- Non-selective: catheter remains in the aorta → code aortic position only
+- Selective: catheter advances beyond the aorta into a named branch vessel → code by selectivity order
+- Code for the HIGHEST ORDER reached in each vascular family (1st, 2nd, 3rd order, beyond 3rd)
+- Each vascular family is coded independently; do not combine orders across families
+
+DIGESTIVE SYSTEM:
+Endoscopy Anatomy Rule:
+- Code based on ANATOMY VIEWED, not the instrument used
+- Colonoscopy (CPT 45378+): scope must reach the CECUM — if cecum not reached, code as sigmoidoscopy
+- Document anatomic landmarks (cecum, hepatic/splenic flexure, terminal ileum if examined)
+
+Adhesion Lysis:
+- 44005: Lysis of extensive intestinal adhesions
+- Add Modifier 22 (increased procedural services) when work is time-consuming and tedious — document estimated additional time and complexity in operative note
+
+Small Intestine Resections:
+- 44120: Single resection with anastomosis
+- 44121: Add-on code for EACH additional resection — use add-on, NOT multiple units of 44120
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PART D & MIPS COMPLIANCE CONTEXT (2026)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Part D Redesign: CY2026 Program Instructions finalized; drug benefit redesign continues per IRA implementation
+- MIPS (CMS-1832-F): Requires HIPAA Security Rule attestations — formal risk analysis AND risk management implementation must be documented for full credit
+- HIPAA Security attestation covers: risk analysis completion, risk management plan, workforce training documentation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CMS STRATEGIC FRAMEWORK (2026)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CMS covers 150 million Americans across Medicare, Medicaid/CHIP, and Marketplace. Six strategic pillars:
+1. Advance Equity | 2. Expand Access | 3. Engage Partners | 4. Drive Innovation | 5. Protect Programs | 6. Foster Excellence
+Cross-cutting initiatives: Behavioral Health integration, Drug Affordability (generics/biosimilars), Maternity Care, Integrating the 3Ms (Medicare + Medicaid/CHIP + Marketplace for continuity of care)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Cite specific policy IDs: "Per LCD L38226..." or "Per NCD 280.14..." — never fabricate IDs
+2. Reference exact ICD-10-CM, CPT, and HCPCS codes — never invent codes
+3. Flag V28 HCC revenue impact for any diagnosis codes: VALID / REJECTED / NOT_MAPPED
+4. For prior auth: enumerate required documentation as a numbered checklist
+5. For denial/appeal: identify denial reason code (CO, PR, OA, PI), cite LCD/NCD, give appeal pathway
+6. For coverage: give YES or NO determination first, then nuances
+7. For CPT surgery coding: apply the anatomy-based, selectivity, and bundling rules above
+8. When V24-only codes appear: proactively suggest V28-valid upgrade codes with HCC numbers
+9. Bold critical warnings: **DENIAL RISK**, **V28 REJECTED**, **RADV RISK**, **BUNDLED — DO NOT CODE**
+10. For MIPS queries: flag HIPAA Security attestation requirements specifically
 
 FORMAT:
 - Lead with a direct answer (1-2 sentences)
 - Use bullet points for code lists
 - Use numbered steps for processes
-- Keep under 600 words unless clinical detail is critical
+- Keep under 600 words unless clinical coding detail requires more
 
 CONSTRAINTS:
-- Never fabricate LCD/NCD IDs or policy content not present in context
-- Do not provide actual medical advice — this is billing and coding guidance only
+- Never fabricate LCD/NCD IDs or policy content not in context
+- Billing and coding guidance only — not medical advice
 - If context is insufficient, specify exactly what additional documentation would resolve the question"""
 
 def call_claude(user_prompt: str, history: list = None) -> str:
@@ -213,14 +321,27 @@ STOPWORDS = {"the","and","for","with","not","are","was","has","per","its",
              "when","what","does","how","can","get","use","all","any","its"}
 
 def build_fts_query(query: str) -> str:
+    """Build FTS5 BM25 query from natural language.
+    Requires first 3 meaningful tokens (AND) for precision; OR-expands the rest for recall.
+    Reduced from 6 to 3 required AND tokens — prevents over-restrictive misses on long queries.
+    """
     cleaned = re.sub(r'\b[A-Z]\d{2,4}(?:\.\d{1,4})?\b', ' ', query, flags=re.IGNORECASE)
     cleaned = re.sub(r'\b\d{5}\b', ' ', cleaned)
-    tokens = [t.strip('.,;:()[]"\'') for t in cleaned.split()
-              if len(t.strip('.,;:()[]"\'')) >= 3
-              and t.lower().strip('.,;:()[]"\'') not in STOPWORDS]
+    tokens = list(dict.fromkeys(  # deduplicate, preserve order
+        t.strip('.,;:()[]"\'').lower() for t in cleaned.split()
+        if len(t.strip('.,;:()[]"\'')) >= 3
+        and t.lower().strip('.,;:()[]"\'') not in STOPWORDS
+    ))
     if not tokens:
         return None
-    return ' AND '.join(tokens[:6])
+    if len(tokens) <= 2:
+        return ' AND '.join(tokens)
+    # Require first 3 terms; OR-expand remaining for recall (BM25 ranks by relevance)
+    required = ' AND '.join(tokens[:3])
+    optional = tokens[3:7]
+    if optional:
+        return f"({required}) OR {' OR '.join(optional)}"
+    return required
 
 # ── Corpus search (3-tier: code-aware → FTS5 → LIKE) ─────────
 def search_corpus(query: str, limit: int = 5, doc_type: str = None, payer: str = None) -> list:
@@ -382,6 +503,42 @@ def v28_lookup(code: str) -> dict:
         "v28_change_note": r.get("v28_change_note"), "clinical_rationale": r.get("clinical_rationale"),
     }
 
+def build_v28_chat_context(icd_codes: list, max_codes: int = 5) -> str:
+    """Rich V28 injection for AI chat — includes upgrade paths, change notes, tier.
+    Makes the AI sound like a domain expert when ICD codes are mentioned.
+    """
+    if not icd_codes:
+        return ""
+    lines = []
+    for code in icd_codes[:max_codes]:
+        r = v28_lookup(code)
+        status   = r["status"]
+        hcc      = r.get("v28_hcc") or "N/A"
+        v24_hcc  = r.get("v24_hcc") or "N/A"
+        tier     = r.get("payment_tier", "standard")
+        desc     = (r.get("description") or "")[:55]
+
+        if status == "VALID":
+            line = f"  {code} ({desc}): ✓ VALID → V28 HCC {hcc} | tier={tier}"
+        elif status == "REJECTED":
+            line = f"  {code} ({desc}): ✗ V28 REJECTED (was V24 HCC {v24_hcc}) — **REVENUE RISK**"
+            upgrades = r.get("upgrade_suggestions", [])
+            if upgrades:
+                top = upgrades[0]
+                up_desc = (top.get("description") or "")[:45]
+                line += f"\n    → Upgrade path: {top['icd10_code']} ({up_desc}) → HCC {top['v28_hcc']} [{top.get('payment_tier','std')}]"
+        elif status == "NOT_MAPPED":
+            line = f"  {code} ({desc}): NOT MAPPED to any HCC in V28"
+        else:
+            line = f"  {code}: NOT FOUND in V28 corpus"
+
+        note = r.get("v28_change_note")
+        if note:
+            line += f"\n    CMS note: {note[:110]}"
+        lines.append(line)
+
+    return "\nV28 HCC Impact for ICD-10 codes in query:\n" + "\n".join(lines) + "\n"
+
 def build_appeal_v28_context(icd_codes: list) -> str:
     if not icd_codes:
         return ""
@@ -407,11 +564,24 @@ def api_status():
     d = db.execute("SELECT COUNT(*) c, SUM(CASE WHEN document_type='lcd' THEN 1 ELSE 0 END) lcd, SUM(CASE WHEN document_type='ncd' THEN 1 ELSE 0 END) ncd FROM documents WHERE status='active'").fetchone()
     v = db.execute("SELECT COUNT(*) c, SUM(v28_pays) valid, SUM(CASE WHEN v24_pays=1 AND v28_pays=0 THEN 1 ELSE 0 END) rejected FROM v28_hcc_codes").fetchone()
     h = db.execute("SELECT COUNT(*) c FROM hipaa_corpus").fetchone()
-    return jsonify({"status":"operational","version":"1.1.0",
-        "corpus":{"total":d["c"],"lcd":d["lcd"],"ncd":d["ncd"],"hipaa":h["c"]},
-        "v28":{"total":v["c"],"valid":v["valid"],"rejected":v["rejected"]},
-        "model":"claude-sonnet-4-20250514","hipaa_compliant":True,
-        "timestamp":datetime.utcnow().isoformat()+"Z"})
+    cat_row = db.execute("SELECT COUNT(*) c FROM v28_hcc_categories").fetchone()
+    return jsonify({
+        "status": "operational",
+        "version": "1.2.0",
+        "corpus": {"total": d["c"], "lcd": d["lcd"], "ncd": d["ncd"], "hipaa": h["c"]},
+        "v28": {
+            "total": v["c"],
+            "valid": v["valid"],
+            "rejected": v["rejected"],
+            "hcc_categories": cat_row["c"],
+            "phase_in": "100% CY2026 (non-PACE MA)",
+            "normalization_factor": 1.067,
+            "ma_coding_adjustment": "5.90%",
+        },
+        "model": "claude-sonnet-4-20250514",
+        "hipaa_compliant": True,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    })
 
 @app.route("/api/v1/query", methods=["POST"])
 @require_api_key
@@ -429,14 +599,9 @@ def api_query():
     docs = search_corpus(q, limit=5, doc_type=data.get("type"), payer=data.get("payer"))
     ctx  = build_rag_context(docs)
 
-    # Auto-inject V28 status for any ICD-10 codes in the query
-    codes = extract_codes(q)
-    v28_ctx = ""
-    if codes["icd10"]:
-        v28_results = [v28_lookup(c) for c in codes["icd10"][:5]]
-        v28_lines = [f"  {r['code']}: {r['status']} (HCC {r.get('v28_hcc','N/A')}, tier={r.get('payment_tier','N/A')})"
-                     for r in v28_results]
-        v28_ctx = "\nV28 HCC Status for codes in query:\n" + "\n".join(v28_lines) + "\n"
+    # Auto-inject rich V28 context for any ICD-10 codes in the query
+    codes   = extract_codes(q)
+    v28_ctx = build_v28_chat_context(codes["icd10"])
 
     # Auto-inject HIPAA context if relevant
     hipaa_ctx = ""
@@ -477,8 +642,283 @@ def api_v28_batch():
     results  = [v28_lookup(c) for c in codes]
     valid    = [r for r in results if r["status"]=="VALID"]
     rejected = [r for r in results if r["status"]=="REJECTED"]
-    return jsonify({"total":len(codes),"valid":len(valid),"rejected":len(rejected),
-        "not_found":len(codes)-len(valid)-len(rejected),"revenue_risk_count":len(rejected),"results":results})
+
+    # Hierarchy analysis on the valid HCC set
+    hierarchy_analysis = None
+    try:
+        from v28_hcc_categories import enforce_hierarchy, score_interactions
+        valid_hcc_nums = []
+        for r in valid:
+            hcc = r.get("v28_hcc")
+            if hcc:
+                try: valid_hcc_nums.append(int(hcc))
+                except ValueError: pass
+        if valid_hcc_nums:
+            h = enforce_hierarchy(list(set(valid_hcc_nums)))
+            i = score_interactions(h["kept"])
+            hierarchy_analysis = {
+                "hccs_kept": h["kept"],
+                "hccs_suppressed_by_hierarchy": h["suppressed"],
+                "hierarchy_rules_fired": len(h["rules_applied"]),
+                "interaction_pairs_found": len(i["interactions_found"]),
+                "interaction_raf_bonus": i["total_interaction_raf"],
+                "radv_risk": "HIGH" if h["suppressed"] else "STANDARD",
+            }
+    except ImportError:
+        pass
+
+    return jsonify({
+        "total": len(codes),
+        "valid": len(valid),
+        "rejected": len(rejected),
+        "not_found": len(codes) - len(valid) - len(rejected),
+        "revenue_risk_count": len(rejected),
+        "hierarchy_analysis": hierarchy_analysis,
+        "results": results,
+    })
+
+@app.route("/api/v1/v28/categories")
+@require_api_key
+def api_v28_categories():
+    """Return all 115 V28 HCC payment categories with hierarchy and RAF data."""
+    try:
+        from v28_hcc_categories import (
+            V28_HCC_CATEGORIES, V28_HIERARCHIES, V28_INTERACTIONS
+        )
+        families = {}
+        for hcc, cat in V28_HCC_CATEGORIES.items():
+            f = cat["family"]
+            families.setdefault(f, []).append(hcc)
+
+        return jsonify({
+            "total_hccs": len(V28_HCC_CATEGORIES),
+            "categories": {
+                str(hcc): {
+                    "hcc": hcc,
+                    "description": cat["desc"],
+                    "family": cat["family"],
+                    "severity": cat["severity"],
+                    "raf_weight_approx": cat["raf_weight"],
+                    "hierarchy_group": cat.get("hierarchy_group"),
+                }
+                for hcc, cat in sorted(V28_HCC_CATEGORIES.items())
+            },
+            "hierarchy_rules": len(V28_HIERARCHIES),
+            "interaction_pairs": len(V28_INTERACTIONS),
+            "families": {f: sorted(hccs) for f, hccs in sorted(families.items())},
+            "model_year": 2026,
+            "phase_in": "100% V28 for non-PACE MA (full implementation CY2026)",
+        })
+    except ImportError:
+        # Fallback: read from database
+        db = get_db()
+        rows = db.execute(
+            "SELECT hcc_number, description, disease_family, severity, raf_weight "
+            "FROM v28_hcc_categories ORDER BY hcc_number"
+        ).fetchall()
+        return jsonify({
+            "total_hccs": len(rows),
+            "categories": [dict(r) for r in rows],
+            "note": "Extended metadata available after importing v28_hcc_categories module",
+        })
+
+
+@app.route("/api/v1/v28/simulate", methods=["POST"])
+@require_api_key
+def api_v28_simulate():
+    """
+    Simulate RAF score for a set of HCC numbers or ICD-10 codes.
+    Applies hierarchy suppression, interaction scoring, normalization.
+
+    Input: {
+      "hcc_numbers": [37, 226, 280, 328],   # V28 HCC numbers, OR
+      "icd10_codes": ["E11.42", "I50.22"],  # ICD-10 codes (auto-resolved to HCCs)
+      "age": 72,
+      "sex": "F",
+      "plan_type": "non_pace"               # "non_pace" | "pace"
+    }
+    """
+    try:
+        from v28_hcc_categories import simulate_raf, enforce_hierarchy, score_interactions
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available. Run build_seed_db.py first."}), 503
+
+    data   = request.get_json() or {}
+    age    = int(data.get("age", 70))
+    sex    = data.get("sex", "F").upper()
+    plan   = data.get("plan_type", "non_pace")
+
+    hcc_numbers = data.get("hcc_numbers", [])
+
+    # If ICD-10 codes provided, resolve to HCC numbers via database
+    icd_codes = data.get("icd10_codes", [])
+    if icd_codes:
+        db = get_db()
+        for code in icd_codes[:50]:
+            row = db.execute(
+                "SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+                (code.upper().strip(),)
+            ).fetchone()
+            if row and row["v28_hcc"]:
+                try:
+                    hcc_numbers.append(int(row["v28_hcc"]))
+                except ValueError:
+                    pass
+
+    if not hcc_numbers:
+        return jsonify({"error": "Provide hcc_numbers or icd10_codes with valid V28 mappings"}), 400
+
+    # Deduplicate
+    hcc_numbers = list(dict.fromkeys(hcc_numbers))
+
+    sim = simulate_raf(hcc_numbers, age=age, sex=sex)
+
+    # Apply MA coding intensity adjustment (5.90%) and normalization factor
+    norm_factor = 1.067  # Non-PACE V28 Part C normalization
+    if plan == "pace":
+        norm_factor = 0.10 * 1.067 + 0.90 * 1.187  # PACE blend
+    coding_adj = 1.0 - 0.059  # 5.90% coding intensity reduction
+
+    adjusted_raf = round(sim["total_raf"] * norm_factor * coding_adj, 4)
+
+    return jsonify({
+        **sim,
+        "plan_type": plan,
+        "normalization_factor": norm_factor,
+        "ma_coding_adjustment": 0.059,
+        "adjusted_raf": adjusted_raf,
+        "methodology": (
+            f"adjusted_raf = total_raf ({sim['total_raf']}) "
+            f"× norm_factor ({norm_factor}) "
+            f"× (1 − coding_adj 0.059)"
+        ),
+    })
+
+
+@app.route("/api/v1/v28/radv/<int:hcc>")
+@require_api_key
+def api_v28_radv(hcc: int):
+    """Return RADV documentation requirements for a specific HCC number."""
+    try:
+        from v28_hcc_categories import get_radv_requirements, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    cat = V28_HCC_CATEGORIES.get(hcc)
+    if not cat:
+        return jsonify({"error": f"HCC {hcc} not found in V28 category catalog"}), 404
+
+    reqs = get_radv_requirements(hcc)
+    return jsonify({
+        "hcc": hcc,
+        "description": cat["desc"],
+        "family": cat["family"],
+        "severity": cat["severity"],
+        "radv_requirements": reqs,
+        "encounter_filters": {
+            "face_to_face_required": True,
+            "audio_only_telehealth_excluded": True,
+            "lab_radiology_alone_excluded": True,
+            "data_source": "Encounter data + FFS only (non-PACE MA)",
+        },
+    })
+
+
+@app.route("/api/v1/v28/hierarchy", methods=["POST"])
+@require_api_key
+def api_v28_hierarchy():
+    """
+    Apply V28 hierarchy rules to a list of HCC numbers.
+    Returns which HCCs are kept vs suppressed and which rules fired.
+
+    Input: {"hcc_numbers": [37, 38, 226, 225, 280]}
+    """
+    try:
+        from v28_hcc_categories import enforce_hierarchy, score_interactions, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    data = request.get_json() or {}
+    hcc_numbers = data.get("hcc_numbers", [])
+    if not hcc_numbers:
+        return jsonify({"error": "hcc_numbers required"}), 400
+
+    h = enforce_hierarchy(hcc_numbers)
+    i = score_interactions(h["kept"])
+
+    return jsonify({
+        "input_hccs": hcc_numbers,
+        "kept": h["kept"],
+        "suppressed": h["suppressed"],
+        "hierarchy_rules_applied": h["rules_applied"],
+        "interactions": i["interactions_found"],
+        "interaction_raf_bonus": i["total_interaction_raf"],
+        "kept_details": [
+            {
+                "hcc": hcc,
+                "desc": V28_HCC_CATEGORIES.get(hcc, {}).get("desc", "Unknown"),
+                "raf_weight": V28_HCC_CATEGORIES.get(hcc, {}).get("raf_weight", 0.0),
+            }
+            for hcc in h["kept"]
+            if hcc in V28_HCC_CATEGORIES
+        ],
+    })
+
+
+@app.route("/api/v1/v28/normalization")
+@require_api_key
+def api_v28_normalization():
+    """Return 2026 CMS normalization factors, MA coding adjustment, and PACE blend ratios."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT config_key, config_value, description, source "
+        "FROM cms_model_config WHERE config_year=2026 ORDER BY config_key"
+    ).fetchall()
+
+    if not rows:
+        # Return hardcoded values if table not yet seeded
+        return jsonify({
+            "year": 2026,
+            "normalization_factors": {
+                "cms_hcc_v28_part_c": 1.067,
+                "cms_hcc_v22_part_c_pace": 1.187,
+                "esrd_dialysis_v24": 1.062,
+                "rxhcc_ma_pd": 1.194,
+                "frailty_fide_snps": "full_2024_factors",
+            },
+            "ma_coding_intensity_adjustment": 0.059,
+            "non_pace_v28_blend": 1.00,
+            "pace_v28_blend": 0.10,
+            "pace_v22_blend": 0.90,
+            "ma_payment_increase_2026": 0.0506,
+            "effective_growth_rate_2026": 0.0904,
+            "mor_record_types": {
+                "non_pace": ["2024 CMS-HCC V28 M", "2026 RxHCC V08 6", "2023 ESRD V24 L"],
+                "pace":     ["2024 CMS-HCC V28 M", "2026 RxHCC V08 6/7", "2017 CMS-HCC V22 K",
+                             "2023 ESRD V24 L",    "2019 ESRD V21 B"],
+            },
+            "encounter_excluded": [
+                "audio_only_telehealth",
+                "labs_radiology_pathology_alone",
+                "home_health_snf_without_face_to_face",
+            ],
+            "encounter_accepted": [
+                "physician_office_em",
+                "inpatient_hospital",
+                "outpatient_hospital",
+                "fqhc_rhc",
+                "video_enabled_telehealth",
+            ],
+            "note": "Run build_seed_db.py to persist full config table",
+        })
+
+    config = {r["config_key"]: r["config_value"] for r in rows}
+    return jsonify({
+        "year": 2026,
+        "config": config,
+        "source": "2026 CMS Final Rate Announcement + Implementation Memo",
+    })
+
 
 @app.route("/api/v1/v28/explain")
 @require_api_key
@@ -595,34 +1035,57 @@ def api_appeals():
     return jsonify({"letter":letter,"sources":[{"id":d["source_id"],"title":d["title"]} for d in docs]})
 
 # ════════════════════════════════════════════════════════════════
+# AUTH — Optional (enforced when REQUIRE_AUTH=true in env)
+# ════════════════════════════════════════════════════════════════
+
+REQUIRE_AUTH = os.environ.get("REQUIRE_AUTH", "false").lower() == "true"
+
+def ensure_users_table():
+    """Create users table if it doesn't exist (safe to call on every startup)."""
+    db = get_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            email        TEXT NOT NULL UNIQUE,
+            name         TEXT NOT NULL,
+            password     TEXT NOT NULL,
+            role         TEXT DEFAULT 'user',
+            active       INTEGER DEFAULT 1,
+            created_at   TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    db.commit()
+
+def login_required(f):
+    """Redirect to /login if REQUIRE_AUTH is enabled and user is not authenticated."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if REQUIRE_AUTH and not session.get("user_id"):
+            return redirect(url_for("login_page", next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+# ════════════════════════════════════════════════════════════════
 # LAYER 1: PORTAL (internal — no API key needed)
 # ════════════════════════════════════════════════════════════════
 
-@app.route("/")
-def portal_index():
-    db = get_db()
-    docs  = db.execute("SELECT COUNT(*) c FROM documents WHERE status='active'").fetchone()
-    v28   = db.execute("SELECT COUNT(*) c, SUM(CASE WHEN v28_pays=0 AND v24_pays=1 THEN 1 ELSE 0 END) rej FROM v28_hcc_codes").fetchone()
-    keys  = db.execute("SELECT COUNT(*) c FROM api_keys WHERE active=1").fetchone()
-    calls = db.execute("SELECT COUNT(*) c FROM audit_log WHERE action='api_request'").fetchone()
-    return render_template("dashboard.html",
-        doc_count=docs["c"], v28_total=v28["c"],
-        v28_rejected=v28["rej"] or 0,
-        api_keys=keys["c"], api_calls=calls["c"])
-
 @app.route("/chat")
+@login_required
 def portal_chat():
     return render_template("chat.html")
 
 @app.route("/v28")
+@login_required
 def portal_v28():
     return render_template("v28.html")
 
 @app.route("/appeals")
+@login_required
 def portal_appeals():
     return render_template("appeals.html")
 
 @app.route("/docs")
+@login_required
 def portal_docs():
     db   = get_db()
     keys = db.execute("SELECT id, customer_name, tier, monthly_usage, last_used, created_at FROM api_keys WHERE active=1 ORDER BY created_at DESC").fetchall()
@@ -650,13 +1113,8 @@ def portal_chat_post():
     docs = search_corpus(q, limit=5)
     ctx  = build_rag_context(docs)
 
-    codes = extract_codes(q)
-    v28_ctx = ""
-    if codes["icd10"]:
-        v28_results = [v28_lookup(c) for c in codes["icd10"][:5]]
-        v28_lines = [f"  {r['code']}: {r['status']} (HCC {r.get('v28_hcc','N/A')}, tier={r.get('payment_tier','N/A')})"
-                     for r in v28_results]
-        v28_ctx = "\nV28 HCC Status for codes in query:\n" + "\n".join(v28_lines) + "\n"
+    codes   = extract_codes(q)
+    v28_ctx = build_v28_chat_context(codes["icd10"])
 
     hipaa_ctx = ""
     if is_hipaa_query(q):
@@ -688,6 +1146,168 @@ def portal_v28_batch():
     rejected = [r for r in results if r["status"]=="REJECTED"]
     return jsonify({"total":len(codes),"valid":len(valid),"rejected":len(rejected),
         "not_found":len(codes)-len(valid)-len(rejected),"results":results})
+
+@app.route("/raf")
+@login_required
+def portal_raf():
+    return render_template("raf.html")
+
+@app.route("/radv")
+@login_required
+def portal_radv():
+    return render_template("radv.html")
+
+@app.route("/portal/v28/simulate-raf", methods=["POST"])
+def portal_raf_post():
+    """RAF simulation endpoint for portal UI — no API key required."""
+    try:
+        from v28_hcc_categories import simulate_raf, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available. Run build_seed_db.py first."}), 503
+
+    data        = request.get_json() or {}
+    age         = int(data.get("age", 70))
+    sex         = data.get("sex", "F").upper()
+    plan        = data.get("plan_type", "non_pace")
+    hcc_numbers = list(data.get("hcc_numbers", []))
+    icd_codes   = data.get("icd10_codes", [])
+    unresolved  = []
+
+    if icd_codes:
+        db = get_db()
+        for code in icd_codes[:50]:
+            row = db.execute(
+                "SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+                (code.upper().strip(),)
+            ).fetchone()
+            if row and row["v28_hcc"]:
+                try:
+                    hcc_numbers.append(int(row["v28_hcc"]))
+                except ValueError:
+                    unresolved.append(code)
+            else:
+                unresolved.append(code)
+
+    if not hcc_numbers:
+        return jsonify({"error": "No valid V28 HCC codes resolved from input. Check codes via V28 HCC Checker."}), 400
+
+    hcc_numbers = list(dict.fromkeys(hcc_numbers))
+    sim = simulate_raf(hcc_numbers, age=age, sex=sex)
+
+    norm_factor = 1.067
+    if plan == "pace":
+        norm_factor = round(0.10 * 1.067 + 0.90 * 1.187, 4)
+    adjusted_raf = round(sim["total_raf"] * norm_factor * (1.0 - 0.059), 4)
+
+    # active_hccs already has {hcc, desc, raf_weight} from simulate_raf
+    hcc_details = sim.get("active_hccs", [])
+
+    # Enrich suppressed HCC ints with descriptions
+    suppressed_details = []
+    for hcc in sim.get("suppressed_hccs", []):
+        hcc_int = hcc if isinstance(hcc, int) else hcc.get("hcc", hcc)
+        cat = V28_HCC_CATEGORIES.get(hcc_int, {})
+        suppressed_details.append({
+            "hcc": hcc_int,
+            "desc": cat.get("desc", "Suppressed by hierarchy rule"),
+        })
+
+    # Remap interactions to frontend-expected shape {hcc1, hcc2, description, raf}
+    interactions_ui = []
+    for ix in sim.get("interactions_found", []):
+        hccs = ix.get("hccs", [])
+        interactions_ui.append({
+            "hcc1": hccs[0] if len(hccs) > 0 else None,
+            "hcc2": hccs[1] if len(hccs) > 1 else None,
+            "description": ix.get("desc") or ix.get("label", ""),
+            "raf": ix.get("additional_raf", 0.0),
+        })
+
+    return jsonify({
+        **sim,
+        "hcc_details": hcc_details,
+        "suppressed_hccs": suppressed_details,
+        "interactions": interactions_ui,
+        "plan_type": plan,
+        "normalization_factor": norm_factor,
+        "ma_coding_adjustment": 0.059,
+        "adjusted_raf": adjusted_raf,
+        "unresolved_codes": unresolved,
+    })
+
+
+@app.route("/portal/v28/radv-requirements", methods=["POST"])
+def portal_radv_post():
+    """RADV documentation requirements for portal — accepts HCC number or ICD-10 code."""
+    try:
+        from v28_hcc_categories import get_radv_requirements, V28_HCC_CATEGORIES, V28_HIERARCHIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    data  = request.get_json() or {}
+    query = data.get("query", "").strip()
+    if not query:
+        return jsonify({"error": "query required (HCC number or ICD-10 code)"}), 400
+
+    hcc_num = None
+
+    # Try parsing as HCC number
+    if query.isdigit():
+        hcc_num = int(query)
+    else:
+        # Try as ICD-10 — look up v28_hcc from DB
+        db  = get_db()
+        row = db.execute(
+            "SELECT v28_hcc, description FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+            (query.upper(),)
+        ).fetchone()
+        if row and row["v28_hcc"]:
+            try:
+                hcc_num = int(row["v28_hcc"])
+            except ValueError:
+                pass
+        if hcc_num is None:
+            # Maybe it's in format "HCC 37"
+            m = re.match(r'^HCC\s*(\d+)$', query, re.IGNORECASE)
+            if m:
+                hcc_num = int(m.group(1))
+
+    if hcc_num is None:
+        return jsonify({"error": f"Could not resolve '{query}' to a V28 HCC. Try a number (e.g. 37) or valid V28 ICD-10 code."}), 404
+
+    cat = V28_HCC_CATEGORIES.get(hcc_num)
+    if not cat:
+        return jsonify({"error": f"HCC {hcc_num} not found in V28 category catalog (1–115)"}), 404
+
+    reqs = get_radv_requirements(hcc_num)
+
+    # Build hierarchy chain for this HCC
+    hierarchy_chain = []
+    for parent, child, rule_desc in V28_HIERARCHIES:
+        if parent == hcc_num:
+            child_cat = V28_HCC_CATEGORIES.get(child, {})
+            hierarchy_chain.append({"hcc": child, "desc": child_cat.get("desc", ""), "role": "child", "rule": rule_desc})
+        elif child == hcc_num:
+            parent_cat = V28_HCC_CATEGORIES.get(parent, {})
+            hierarchy_chain.append({"hcc": parent, "desc": parent_cat.get("desc", ""), "role": "parent", "rule": rule_desc})
+
+    return jsonify({
+        "hcc": hcc_num,
+        "description": cat["desc"],
+        "family": cat["family"],
+        "severity": cat["severity"],
+        "raf_weight": cat.get("raf_weight"),
+        "hierarchy_group": cat.get("hierarchy_group"),
+        "radv_requirements": reqs,
+        "hierarchy_chain": hierarchy_chain,
+        "encounter_filters": {
+            "face_to_face_required": True,
+            "audio_only_telehealth_excluded": True,
+            "lab_radiology_alone_excluded": True,
+            "data_source": "Encounter data + FFS only (non-PACE MA CY2026)",
+        },
+    })
+
 
 @app.route("/portal/v28/explain", methods=["POST"])
 def portal_v28_explain():
@@ -736,6 +1356,243 @@ def portal_appeals_post():
         v28_context=v28_ctx,
     ))
     return jsonify({"letter":letter,"sources":[{"id":d["source_id"],"title":d["title"]} for d in docs]})
+
+
+@app.route("/member")
+@login_required
+def portal_member():
+    return render_template("member.html")
+
+
+@app.route("/portal/member/risk-profile", methods=["POST"])
+def portal_member_risk_profile():
+    """Combined: V28 batch audit + RAF simulation + RADV analysis in one request."""
+    try:
+        from v28_hcc_categories import simulate_raf, V28_HCC_CATEGORIES
+    except ImportError:
+        return jsonify({"error": "V28 categories module not available"}), 503
+
+    data      = request.get_json() or {}
+    icd_codes = data.get("icd10_codes", [])
+    age       = int(data.get("age", 70))
+    sex       = data.get("sex", "F").upper()
+    plan      = data.get("plan_type", "non_pace")
+
+    if not icd_codes:
+        return jsonify({"error": "icd10_codes required"}), 400
+
+    # 1. V28 batch audit
+    results  = [v28_lookup(c) for c in icd_codes[:50]]
+    valid    = [r for r in results if r["status"] == "VALID"]
+    rejected = [r for r in results if r["status"] == "REJECTED"]
+
+    # 2. Resolve valid ICD-10 codes → HCC numbers
+    db = get_db()
+    hcc_numbers = []
+    for code in icd_codes[:50]:
+        row = db.execute(
+            "SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
+            (code.upper().strip(),)
+        ).fetchone()
+        if row and row["v28_hcc"]:
+            try:
+                hcc_numbers.append(int(row["v28_hcc"]))
+            except ValueError:
+                pass
+    hcc_numbers = list(dict.fromkeys(hcc_numbers))
+
+    # 3. RAF simulation
+    raf_result = None
+    if hcc_numbers:
+        sim = simulate_raf(hcc_numbers, age=age, sex=sex)
+        norm_factor  = 1.067 if plan != "pace" else round(0.10 * 1.067 + 0.90 * 1.187, 4)
+        adjusted_raf = round(sim["total_raf"] * norm_factor * 0.941, 4)
+
+        interactions_ui = [
+            {
+                "hcc1": ix.get("hccs", [None])[0],
+                "hcc2": ix.get("hccs", [None, None])[1],
+                "description": ix.get("desc") or ix.get("label", ""),
+                "raf": ix.get("additional_raf", 0.0),
+            }
+            for ix in sim.get("interactions_found", [])
+        ]
+        suppressed_details = [
+            {"hcc": (h if isinstance(h, int) else h.get("hcc", h)),
+             "desc": V28_HCC_CATEGORIES.get(h if isinstance(h, int) else h.get("hcc", h), {}).get("desc", "")}
+            for h in sim.get("suppressed_hccs", [])
+        ]
+        raf_result = {
+            **sim,
+            "hcc_details": sim.get("active_hccs", []),
+            "suppressed_hccs": suppressed_details,
+            "interactions": interactions_ui,
+            "normalization_factor": norm_factor,
+            "ma_coding_adjustment": 0.059,
+            "adjusted_raf": adjusted_raf,
+            "plan_type": plan,
+        }
+
+    # 4. Revenue opportunities from rejected codes
+    revenue_opps = [
+        {
+            "from_code": r["code"],
+            "to_code": upg["icd10_code"],
+            "description": upg.get("description") or upg.get("hcc_label", ""),
+            "hcc": upg.get("v28_hcc"),
+            "tier": upg.get("payment_tier", "standard"),
+        }
+        for r in rejected
+        for upg in (r.get("upgrade_suggestions") or [])[:2]
+    ]
+
+    suppressed_count = len(raf_result.get("suppressed_hccs", [])) if raf_result else 0
+
+    return jsonify({
+        "audit":  {"total": len(results), "valid": len(valid), "rejected": len(rejected),
+                   "not_found": len(results) - len(valid) - len(rejected), "results": results},
+        "raf":    raf_result,
+        "radv_risk": "HIGH" if suppressed_count > 0 else "STANDARD",
+        "suppressed_count": suppressed_count,
+        "revenue_opportunities": revenue_opps,
+        "member": {"age": age, "sex": sex, "plan_type": plan},
+    })
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if session.get("user_id"):
+        return redirect(url_for("portal_dashboard"))
+    error = None
+    if request.method == "POST":
+        email    = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        try:
+            ensure_users_table()
+            db  = get_db()
+            row = db.execute("SELECT * FROM users WHERE email=? AND active=1", (email,)).fetchone()
+            if row and check_password_hash(row["password"], password):
+                session.permanent = True
+                session["user_id"]   = row["id"]
+                session["user_name"] = row["name"]
+                session["user_email"] = row["email"]
+                next_url = request.args.get("next", "/dashboard")
+                return redirect(next_url)
+            error = "Invalid email or password."
+        except Exception as e:
+            logger.error(f"Login error: {e}")
+            error = "Login failed. Please try again."
+    return render_template("login.html", error=error)
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup_page():
+    if session.get("user_id"):
+        return redirect(url_for("portal_dashboard"))
+    error = None
+    if request.method == "POST":
+        name     = request.form.get("name", "").strip()
+        email    = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        company  = request.form.get("company", "").strip()
+        if not name or not email or not password:
+            error = "Name, email, and password are required."
+        elif len(password) < 8:
+            error = "Password must be at least 8 characters."
+        else:
+            try:
+                ensure_users_table()
+                db = get_db()
+                db.execute(
+                    "INSERT INTO users (email, name, password) VALUES (?,?,?)",
+                    (email, name, generate_password_hash(password))
+                )
+                db.commit()
+                row = db.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+                session["user_id"]    = row["id"]
+                session["user_name"]  = row["name"]
+                session["user_email"] = row["email"]
+                return redirect(url_for("portal_dashboard"))
+            except sqlite3.IntegrityError:
+                error = "An account with that email already exists."
+            except Exception as e:
+                logger.error(f"Signup error: {e}")
+                error = "Account creation failed. Please try again."
+    return render_template("signup.html", error=error)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("landing"))
+
+# ════════════════════════════════════════════════════════════════
+# PUBLIC PAGES — Landing, Compliance, Contact
+# ════════════════════════════════════════════════════════════════
+
+@app.route("/")
+def landing():
+    return render_template("landing.html")
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
+
+@app.route("/terms")
+def terms():
+    return render_template("terms.html")
+
+@app.route("/hipaa")
+def hipaa_page():
+    return render_template("hipaa.html")
+
+@app.route("/contact", methods=["GET", "POST"])
+def contact():
+    submitted = False
+    if request.method == "POST":
+        # Log the inquiry; in production wire to email / CRM
+        name    = request.form.get("name","").strip()
+        email   = request.form.get("email","").strip()
+        company = request.form.get("company","").strip()
+        message = request.form.get("message","").strip()
+        plan    = request.form.get("plan","general")
+        db = get_db()
+        try:
+            db.execute(
+                "INSERT INTO audit_log(action,resource_type,user_session,ip_address,query_text) VALUES(?,?,?,?,?)",
+                ("contact_form", "lead", email, request.remote_addr,
+                 f"{name} | {company} | {plan} | {message[:200]}")
+            )
+            db.commit()
+        except Exception:
+            pass
+        submitted = True
+        logger.info(f"Contact form: {name} <{email}> [{company}] — {plan}")
+    return render_template("contact.html", submitted=submitted)
+
+# ════════════════════════════════════════════════════════════════
+# PORTAL — Rename / to /dashboard (add login_required gate)
+# ════════════════════════════════════════════════════════════════
+
+@app.route("/dashboard")
+@login_required
+def portal_dashboard():
+    db = get_db()
+    docs  = db.execute("SELECT COUNT(*) c FROM documents WHERE status='active'").fetchone()
+    v28   = db.execute("SELECT COUNT(*) c, SUM(CASE WHEN v28_pays=0 AND v24_pays=1 THEN 1 ELSE 0 END) rej FROM v28_hcc_codes").fetchone()
+    keys  = db.execute("SELECT COUNT(*) c FROM api_keys WHERE active=1").fetchone()
+    calls = db.execute("SELECT COUNT(*) c FROM audit_log WHERE action='api_request'").fetchone()
+    return render_template("dashboard.html",
+        doc_count=docs["c"], v28_total=v28["c"],
+        v28_rejected=v28["rej"] or 0,
+        api_keys=keys["c"], api_calls=calls["c"])
+
+# ── Error handlers ─────────────────────────────────────────────
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("404.html"), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"500 error: {e}")
+    return render_template("500.html"), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

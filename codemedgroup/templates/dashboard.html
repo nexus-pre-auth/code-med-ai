@@ -26,7 +26,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:-.5px}
 .logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
 .logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
-.nav{padding:16px 12px;flex:1}
+.nav{padding:16px 12px;flex:1;overflow-y:auto}
 .nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
 .nav-item:hover{background:var(--surface2);color:var(--text)}
@@ -128,16 +128,20 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
       <div class="logo-icon">CMG</div>
       <div>
         <div class="logo-text">CodeMed Group</div>
-        <div class="logo-sub">v1.0 · HIPAA Compliant</div>
+        <div class="logo-sub">v1.2 · HIPAA Compliant</div>
       </div>
     </div>
   </div>
   <div class="nav">
     <div class="nav-section">Platform</div>
-    <a href="/" class="nav-item active"><span class="nav-icon">⬡</span>Dashboard</a>
+    <a href="/dashboard" class="nav-item active"><span class="nav-icon">⬡</span>Dashboard</a>
     <a href="/chat" class="nav-item"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
     <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
     <a href="/appeals" class="nav-item"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Risk Adjustment</div>
+    <a href="/member" class="nav-item"><span class="nav-icon">⬟</span>Member Risk Profile</a>
+    <a href="/raf" class="nav-item"><span class="nav-icon">◎</span>RAF Simulator</a>
+    <a href="/radv" class="nav-item"><span class="nav-icon">◈</span>RADV Audit Prep</a>
     <div class="nav-section">Developer</div>
     <a href="/docs" class="nav-item"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
     <a href="/api/v1/status" class="nav-item" target="_blank"><span class="nav-icon">◌</span>API Status</a>
@@ -205,6 +209,18 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         <div class="module-name">Appeal Generator</div>
         <div class="module-desc">Generate citation-heavy appeal letters in seconds. Pulls LCD/NCD policy language automatically. 30 minutes → 30 seconds.</div>
       </a>
+      <a href="/raf" class="module-card">
+        <span class="module-badge badge-live">LIVE</span>
+        <div class="module-icon" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.25);color:#8B5CF6">◎</div>
+        <div class="module-name">RAF Simulator</div>
+        <div class="module-desc">Simulate CY2026 RAF scores from ICD-10 codes or HCC numbers. Enforces V28 hierarchy suppression, interaction bonuses, normalization, and 5.90% coding adjustment.</div>
+      </a>
+      <a href="/radv" class="module-card">
+        <span class="module-badge badge-live">LIVE</span>
+        <div class="module-icon" style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);color:#F97316">◈</div>
+        <div class="module-name">RADV Audit Prep</div>
+        <div class="module-desc">MEAT documentation checklist per HCC. Hierarchy chain warnings, common audit traps, and encounter eligibility rules for PY2020+ annual RADV programs.</div>
+      </a>
       <a href="/docs" class="module-card">
         <span class="module-badge badge-api">API</span>
         <div class="module-icon yellow">◫</div>
@@ -238,8 +254,9 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
             <div class="terminal-line"><span class="green">✓</span> <span class="white">LCD policies</span> <span class="yellow">INDEXED</span></div>
             <div class="terminal-line"><span class="green">✓</span> <span class="white">NCD policies</span> <span class="yellow">INDEXED</span></div>
             <div class="terminal-line"><span class="green">✓</span> <span class="white">V28 HCC map</span> <span class="blue">2026 COMPLETE</span></div>
+            <div class="terminal-line"><span class="green">✓</span> <span class="white">RAF Simulator</span> <span class="yellow">hierarchy + interactions</span></div>
+            <div class="terminal-line"><span class="green">✓</span> <span class="white">RADV Prep</span> <span class="yellow">MEAT checklists</span></div>
             <div class="terminal-line"><span class="green">✓</span> <span class="white">Claude API</span> <span class="blue">claude-sonnet-4</span></div>
-            <div class="terminal-line"><span class="green">✓</span> <span class="white">Taxonomy</span> <span class="yellow">9 doc types</span></div>
             <div class="terminal-line"><span class="green">✓</span> <span class="white">HIPAA audit log</span> <span class="blue">ACTIVE</span></div>
             <div class="terminal-line" style="margin-top:8px;color:#334155">─────────────────────────────</div>
             <div class="terminal-line"><span style="color:#475569">$</span> <span class="white">corpus ready · deploy at codemedgroup.com</span></div>

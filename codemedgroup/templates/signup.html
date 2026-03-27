@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create Account — CodeMed Group</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--border2:#252D40;--blue:#2563EB;--green:#10B981;--red:#EF4444;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex;align-items:center;justify-content:center;-webkit-font-smoothing:antialiased;padding:24px}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.25;pointer-events:none;z-index:0}
+.glow{position:fixed;top:20%;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(37,99,235,.12) 0%,transparent 70%);pointer-events:none;z-index:0}
+.card{position:relative;z-index:1;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:40px;width:100%;max-width:420px}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;justify-content:center}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--blue),#1D4ED8);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;box-shadow:0 0 16px rgba(37,99,235,.4)}
+h1{font-size:22px;font-weight:700;letter-spacing:-.4px;margin-bottom:6px;text-align:center}
+.sub{font-size:13.5px;color:var(--muted);text-align:center;margin-bottom:28px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{margin-bottom:14px}
+label{display:block;font-size:11px;font-weight:600;color:var(--subtle);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-family:var(--font);font-size:13.5px;padding:9px 12px;outline:none;transition:border-color .15s}
+input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.btn{display:block;width:100%;padding:11px;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;border:none;text-align:center;transition:all .15s;text-decoration:none;margin-top:18px}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:#1D4ED8;box-shadow:0 0 20px rgba(37,99,235,.4)}
+.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--red);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.notice{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:var(--green);padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px;line-height:1.5}
+.link-row{text-align:center;font-size:13px;color:var(--muted);margin-top:18px}
+.link-row a{color:#3B82F6;text-decoration:none;font-weight:500}
+.link-row a:hover{text-decoration:underline}
+.tos{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.5}
+.tos a{color:var(--muted);text-decoration:underline}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-size:12.5px;position:fixed;top:24px;left:24px;z-index:2;transition:color .15s}
+.back:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<a href="/" class="back">← Back to home</a>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">CMG</div>
+    <span style="font-weight:700;font-size:16px;letter-spacing:-.3px">CodeMed Group</span>
+  </div>
+  <h1>Create your account</h1>
+  <p class="sub">Free access · No credit card required</p>
+
+  <div class="notice">
+    ✓ Instant access to V28 HCC Checker, RAF Simulator, AI Chat, and more<br>
+    ✓ 100 free API calls/month on the Demo tier
+  </div>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="/signup">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" placeholder="Jane Smith" required autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label for="company">Company</label>
+        <input type="text" id="company" name="company" placeholder="Acme Health" autocomplete="organization">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="email">Work Email</label>
+      <input type="email" id="email" name="email" placeholder="you@company.com" required autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label for="password">Password <span style="text-transform:none;font-weight:400">(8+ characters)</span></label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required minlength="8" autocomplete="new-password">
+    </div>
+    <button type="submit" class="btn btn-primary">Create Account →</button>
+  </form>
+
+  <p class="tos">By creating an account you agree to our <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>.</p>
+
+  <div class="link-row">Already have an account? <a href="/login">Sign in →</a></div>
+</div>
+</body>
+</html>

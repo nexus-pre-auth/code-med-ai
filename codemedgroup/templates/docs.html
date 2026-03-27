@@ -15,7 +15,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
 .logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
 .logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
-.nav{padding:16px 12px;flex:1}
+.nav{padding:16px 12px;flex:1;overflow-y:auto}
 .nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
 .nav-item:hover{background:var(--surface2);color:var(--text)}
@@ -89,7 +89,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   <div class="logo">
     <div class="logo-mark">
       <div class="logo-icon">CMG</div>
-      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.0 · HIPAA Compliant</div></div>
+      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.2 · HIPAA Compliant</div></div>
     </div>
   </div>
   <div class="nav">
@@ -98,11 +98,15 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <a href="/chat" class="nav-item"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
     <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
     <a href="/appeals" class="nav-item"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Risk Adjustment</div>
+    <a href="/member" class="nav-item"><span class="nav-icon">⬟</span>Member Risk Profile</a>
+    <a href="/raf" class="nav-item"><span class="nav-icon">◎</span>RAF Simulator</a>
+    <a href="/radv" class="nav-item"><span class="nav-icon">◈</span>RADV Audit Prep</a>
     <div class="nav-section">Developer</div>
     <a href="/docs" class="nav-item active"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
   </div>
   <div class="sidebar-footer">
-    <span class="status-dot"></span><span class="status-text">API v1.0 · Operational</span>
+    <span class="status-dot"></span><span class="status-text">API v1.2 · Operational</span>
   </div>
 </nav>
 
@@ -127,9 +131,9 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
         <div class="tier-rpm">{{ tier['rpm'] }} req/min · {% if tier['monthly'] == 999999 %}Unlimited{% else %}{{ "{:,}".format(tier['monthly']) }}/mo{% endif %}</div>
         <div class="tier-features">
           {% if tier_id == 'demo' %}Testing only<br>No BAA<br>No SLA{% endif %}
-          {% if tier_id == 'starter' %}RAG queries<br>V28 lookup<br>Policy search{% endif %}
-          {% if tier_id == 'growth' %}All endpoints<br>Batch V28<br>Appeals API{% endif %}
-          {% if tier_id == 'enterprise' %}All endpoints<br>BAA included<br>SLA + support{% endif %}
+          {% if tier_id == 'starter' %}RAG queries<br>V28 lookup<br>Policy search<br>V28 normalization{% endif %}
+          {% if tier_id == 'growth' %}All endpoints<br>Batch V28 + hierarchy<br>RAF simulation<br>RADV requirements<br>Appeals API{% endif %}
+          {% if tier_id == 'enterprise' %}All endpoints<br>Member risk profile<br>BAA included<br>SLA + support{% endif %}
         </div>
       </div>
       {% endfor %}
@@ -231,6 +235,143 @@ curl -X POST https://codemedgroup.com/api/v1/query \
   <span class="key">"results"</span>: [...]
 }
             </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/v28/simulate</span>
+            <span class="endpoint-desc">RAF simulation — hierarchy + interactions + normalization</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// Request — provide HCC numbers or ICD-10 codes (or both)</span>
+{
+  <span class="key">"hcc_numbers"</span>: [<span class="val">37</span>, <span class="val">222</span>, <span class="val">326</span>],   <span class="comment">// V28 HCC numbers</span>
+  <span class="key">"icd10_codes"</span>:  [<span class="str">"E11.22"</span>, <span class="str">"N18.5"</span>],  <span class="comment">// auto-resolved to HCCs</span>
+  <span class="key">"age"</span>: <span class="val">72</span>,
+  <span class="key">"sex"</span>: <span class="str">"F"</span>,
+  <span class="key">"plan_type"</span>: <span class="str">"non_pace"</span>  <span class="comment">// "non_pace" | "pace"</span>
+}
+
+<span class="comment">// Response</span>
+{
+  <span class="key">"total_raf"</span>: <span class="val">1.8421</span>,
+  <span class="key">"adjusted_raf"</span>: <span class="val">1.6455</span>,       <span class="comment">// × norm_factor × 0.941</span>
+  <span class="key">"demographic_raf"</span>: <span class="val">0.209</span>,
+  <span class="key">"hcc_raf"</span>: <span class="val">1.533</span>,
+  <span class="key">"interaction_raf"</span>: <span class="val">0.156</span>,       <span class="comment">// DM+CKD5 interaction bonus</span>
+  <span class="key">"normalization_factor"</span>: <span class="val">1.067</span>,
+  <span class="key">"suppressed_hccs"</span>: [],            <span class="comment">// hierarchy-suppressed HCCs</span>
+  <span class="key">"interactions_found"</span>: [...]
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/v28/hierarchy</span>
+            <span class="endpoint-desc">Apply V28 hierarchy suppression rules to HCC set</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// Request</span>
+{ <span class="key">"hcc_numbers"</span>: [<span class="val">222</span>, <span class="val">226</span>, <span class="val">37</span>, <span class="val">38</span>] }
+
+<span class="comment">// Response — 222 suppresses 226 (End-stage HF trumps Other HF)</span>
+{
+  <span class="key">"kept"</span>: [<span class="val">222</span>, <span class="val">37</span>],
+  <span class="key">"suppressed"</span>: [<span class="val">226</span>, <span class="val">38</span>],
+  <span class="key">"hierarchy_rules_applied"</span>: [
+    { <span class="key">"parent_hcc"</span>: <span class="val">222</span>, <span class="key">"suppressed_hcc"</span>: <span class="val">226</span>, <span class="key">"rule"</span>: <span class="str">"End-stage HF trumps..."</span> }
+  ],
+  <span class="key">"interaction_raf_bonus"</span>: <span class="val">0.0</span>
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/v28/radv/:hcc</span>
+            <span class="endpoint-desc">RADV documentation requirements for an HCC number</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// GET /api/v1/v28/radv/37  (Diabetes with Chronic Complications)</span>
+{
+  <span class="key">"hcc"</span>: <span class="val">37</span>,
+  <span class="key">"description"</span>: <span class="str">"Diabetes with Chronic Complications"</span>,
+  <span class="key">"family"</span>: <span class="str">"Diabetes"</span>,
+  <span class="key">"severity"</span>: <span class="str">"high"</span>,
+  <span class="key">"radv_requirements"</span>: {
+    <span class="key">"required_documentation"</span>: [...],
+    <span class="key">"common_traps"</span>: [...],
+    <span class="key">"monitoring_examples"</span>: [...]
+  },
+  <span class="key">"encounter_filters"</span>: { <span class="key">"face_to_face_required"</span>: <span class="val">true</span>, ... }
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/v28/categories</span>
+            <span class="endpoint-desc">Full V28 HCC catalog — all 115 categories with RAF weights</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+<span class="comment">// Response</span>
+{
+  <span class="key">"total_hccs"</span>: <span class="val">115</span>,
+  <span class="key">"hierarchy_rules"</span>: <span class="val">43</span>,
+  <span class="key">"interaction_pairs"</span>: <span class="val">18</span>,
+  <span class="key">"model_year"</span>: <span class="val">2026</span>,
+  <span class="key">"categories"</span>: {
+    <span class="str">"37"</span>: { <span class="key">"hcc"</span>: <span class="val">37</span>, <span class="key">"description"</span>: <span class="str">"Diabetes with Chronic Complications"</span>,
+             <span class="key">"raf_weight_approx"</span>: <span class="val">0.302</span>, <span class="key">"severity"</span>: <span class="str">"high"</span> },
+    <span class="comment">// ... 114 more</span>
+  },
+  <span class="key">"families"</span>: { <span class="str">"Diabetes"</span>: [<span class="val">35</span>,<span class="val">36</span>,<span class="val">37</span>,<span class="val">38</span>,...], ... }
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/v28/normalization</span>
+            <span class="endpoint-desc">2026 CMS normalization factors, PACE blend, MA coding adjustment</span>
+          </div>
+          <div class="endpoint-body">
+            <div class="code-block">
+{
+  <span class="key">"year"</span>: <span class="val">2026</span>,
+  <span class="key">"normalization_factors"</span>: {
+    <span class="key">"cms_hcc_v28_part_c"</span>: <span class="val">1.067</span>,
+    <span class="key">"cms_hcc_v22_part_c_pace"</span>: <span class="val">1.187</span>,
+    <span class="key">"esrd_dialysis_v24"</span>: <span class="val">1.062</span>
+  },
+  <span class="key">"ma_coding_intensity_adjustment"</span>: <span class="val">0.059</span>,
+  <span class="key">"pace_v28_blend"</span>: <span class="val">0.10</span>, <span class="key">"pace_v22_blend"</span>: <span class="val">0.90</span>,
+  <span class="key">"effective_growth_rate_2026"</span>: <span class="val">0.0904</span>
+}
+            </div>
+          </div>
+        </div>
+
+        <div class="endpoint">
+          <div class="endpoint-header" onclick="toggleEndpoint(this)">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/v28/explain?code=I50.9</span>
+            <span class="endpoint-desc">Claude-generated plain-English V28 change explanation</span>
           </div>
         </div>
 

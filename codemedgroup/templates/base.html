@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{% block title %}CodeMed Group{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/portal.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+
+<nav class="sidebar" id="sidebar">
+  <div class="logo">
+    <a href="/dashboard" class="logo-mark" style="text-decoration:none;color:inherit">
+      <div class="logo-icon">CMG</div>
+      <div>
+        <div class="logo-text">CodeMed Group</div>
+        <div class="logo-sub">v2.0 · HIPAA Compliant</div>
+      </div>
+    </a>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Platform</div>
+    <a href="/dashboard" class="nav-item {% if active=='dashboard' %}active{% endif %}">
+      <span class="nav-icon">⬡</span>Dashboard
+    </a>
+    <a href="/chat" class="nav-item {% if active=='chat' %}active{% endif %}">
+      <span class="nav-icon">◈</span>AI Chat
+    </a>
+    <a href="/v28" class="nav-item {% if active=='v28' %}active{% endif %}">
+      <span class="nav-icon">◉</span>V28 HCC Checker
+    </a>
+    <a href="/appeals" class="nav-item {% if active=='appeals' %}active{% endif %}">
+      <span class="nav-icon">◎</span>Appeal Generator
+    </a>
+    <div class="nav-section">Risk Adjustment</div>
+    <a href="/member" class="nav-item {% if active=='member' %}active{% endif %}">
+      <span class="nav-icon">⬟</span>Member Risk Profile
+    </a>
+    <a href="/raf" class="nav-item {% if active=='raf' %}active{% endif %}">
+      <span class="nav-icon">◎</span>RAF Simulator
+    </a>
+    <a href="/radv" class="nav-item {% if active=='radv' %}active{% endif %}">
+      <span class="nav-icon">◈</span>RADV Audit Prep
+    </a>
+    <div class="nav-section">Developer</div>
+    <a href="/docs" class="nav-item {% if active=='docs' %}active{% endif %}">
+      <span class="nav-icon">◫</span>API Docs &amp; Keys
+      <span class="nav-badge">API</span>
+    </a>
+    <a href="/api/v1/status" class="nav-item" target="_blank">
+      <span class="nav-icon">◌</span>API Status
+    </a>
+    <div class="nav-section">Account</div>
+    <a href="/contact" class="nav-item {% if active=='contact' %}active{% endif %}">
+      <span class="nav-icon">✉</span>Contact / Support
+    </a>
+  </div>
+  <div class="sidebar-footer">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div><span class="status-dot"></span><span class="status-text">All systems operational</span></div>
+      <a href="/logout" style="font-size:11px;color:var(--muted);text-decoration:none;opacity:.7" title="Sign out">⏻</a>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--muted);font-family:var(--mono)">© 2025 CodeMed Group</div>
+  </div>
+</nav>
+
+<main class="main">
+  {% block main %}
+  <div class="topbar">
+    {% block topbar %}{% endblock %}
+  </div>
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+  {% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RADV Audit Prep — CodeMed Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--blue:#2563EB;--cyan:#06B6D4;--green:#10B981;--red:#EF4444;--yellow:#F59E0B;--purple:#8B5CF6;--orange:#F97316;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.3;pointer-events:none}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;z-index:10;position:fixed;top:0;bottom:0}
+.logo{padding:24px 20px;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+.nav{padding:16px 12px;flex:1;overflow-y:auto}
+.nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(249,115,22,.1);color:var(--orange);border-left:2px solid var(--orange)}
+.nav-icon{width:16px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.status-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;box-shadow:0 0 6px var(--green)}
+.status-text{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.main{margin-left:220px;flex:1;z-index:1}
+.topbar{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(6,8,13,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:5}
+.page-title{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.page-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.content{padding:32px;max-width:1100px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.card-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600;letter-spacing:-.2px}
+.card-body{padding:22px}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:14px;border-radius:7px;padding:10px 14px;width:100%;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--orange)}
+input::placeholder{color:var(--muted)}
+select option{background:var(--surface2)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:7px;font-family:var(--font);font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
+.btn-orange{background:var(--orange);color:#000}
+.btn-orange:hover{box-shadow:0 0 24px rgba(249,115,22,.4);opacity:.95}
+.btn-ghost{background:transparent;color:var(--subtle);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.spinner{width:18px;height:18px;border:2px solid rgba(249,115,22,.3);border-top-color:var(--orange);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* HCC info header */
+.hcc-header{background:linear-gradient(135deg,rgba(249,115,22,.08),rgba(239,68,68,.04));border:1px solid rgba(249,115,22,.25);border-radius:10px;padding:22px 26px;margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.hcc-num-big{font-family:var(--mono);font-size:40px;font-weight:700;color:var(--orange);line-height:1;margin-bottom:4px}
+.hcc-family-badge{display:inline-block;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);color:var(--orange);font-size:11px;font-family:var(--mono);padding:3px 10px;border-radius:10px;margin-top:6px}
+.severity-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-family:var(--mono);font-size:12px;font-weight:600}
+.sev-catastrophic{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.sev-high{background:rgba(245,158,11,.12);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}
+.sev-moderate{background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2)}
+.sev-low{background:rgba(100,116,139,.15);color:var(--muted);border:1px solid var(--border)}
+/* MEAT checklist */
+.meat-section{margin-bottom:24px}
+.meat-letter{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--orange);margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.meat-letter span{font-size:13px;color:var(--muted);font-weight:400;font-family:var(--font)}
+.meat-items{list-style:none;display:flex;flex-direction:column;gap:7px}
+.meat-item{display:flex;align-items:flex-start;gap:10px;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:13px;color:var(--subtle);cursor:pointer;transition:all .15s;user-select:none}
+.meat-item:hover{border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.04)}
+.meat-item.checked{border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05);color:var(--text)}
+.meat-check{width:16px;height:16px;border:1px solid var(--border);border-radius:3px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s}
+.meat-item.checked .meat-check{background:var(--green);border-color:var(--green);color:#000}
+.checklist-progress{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px}
+.progress-bar-wrap{flex:1;background:rgba(0,0,0,.3);border-radius:10px;height:6px;overflow:hidden}
+.progress-bar{height:100%;border-radius:10px;background:var(--green);transition:width .3s}
+.progress-label{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+/* Common traps */
+.trap-item{background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.18);border-radius:7px;padding:12px 16px;margin-bottom:10px;font-size:13px}
+.trap-title{font-weight:600;color:var(--red);margin-bottom:4px;font-size:12px;text-transform:uppercase;font-family:var(--mono);letter-spacing:.04em}
+.trap-body{color:var(--subtle)}
+/* Encounter filter reminder */
+.encounter-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:6px;font-size:12px;font-family:var(--mono);margin:3px}
+.chip-ok{background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.25)}
+.chip-no{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+/* HCC quick buttons */
+.hcc-quick-btn{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:5px 12px;font-family:var(--mono);font-size:12px;color:var(--orange);cursor:pointer;margin:3px;transition:all .15s}
+.hcc-quick-btn:hover{border-color:var(--orange);background:rgba(249,115,22,.08)}
+/* Hierarchy chain */
+.chain-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(30,36,53,.6);font-size:13px}
+.chain-item:last-child{border-bottom:none}
+.chain-arrow{color:var(--muted);font-size:11px;flex-shrink:0}
+.chain-hcc{font-family:var(--mono);font-weight:700;width:60px;flex-shrink:0}
+.chain-hcc.is-parent{color:var(--orange)}
+.chain-hcc.is-child{color:var(--muted)}
+.chain-desc{flex:1;color:var(--subtle);font-size:12px}
+.chain-role{font-size:10px;padding:2px 7px;border-radius:8px;font-family:var(--mono);flex-shrink:0}
+.role-parent{background:rgba(249,115,22,.12);color:var(--orange)}
+.role-child{background:rgba(100,116,139,.12);color:var(--muted)}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">CMG</div>
+      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.2 · HIPAA Compliant</div></div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Platform</div>
+    <a href="/" class="nav-item"><span class="nav-icon">⬡</span>Dashboard</a>
+    <a href="/chat" class="nav-item"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
+    <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
+    <a href="/appeals" class="nav-item"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Risk Adjustment</div>
+    <a href="/member" class="nav-item"><span class="nav-icon">⬟</span>Member Risk Profile</a>
+    <a href="/raf" class="nav-item"><span class="nav-icon">◎</span>RAF Simulator</a>
+    <a href="/radv" class="nav-item active"><span class="nav-icon">◈</span>RADV Audit Prep</a>
+    <div class="nav-section">Developer</div>
+    <a href="/docs" class="nav-item"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
+  </div>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span><span class="status-text">PY2020+ annual RADV audits</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title">◈ RADV Audit Prep</div>
+      <div class="page-sub">CMS HCC documentation requirements · MEAT criteria · Hierarchy traps · CY2026 V28</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Search -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">HCC Lookup</div>
+        <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">Enter V28 HCC number or ICD-10 code</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <input type="text" id="hcc-input" placeholder="HCC number (e.g. 37) or ICD-10 code (e.g. E11.22)" style="flex:1;font-family:var(--mono);font-size:15px">
+          <button class="btn btn-orange" onclick="lookupHCC()">Audit Prep</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">High-volume HCCs — quick lookup:</div>
+        <div>
+          <span class="hcc-quick-btn" onclick="quickHCC(37)">HCC 37 — Diabetes</span>
+          <span class="hcc-quick-btn" onclick="quickHCC(222)">HCC 222 — End-Stage HF</span>
+          <span class="hcc-quick-btn" onclick="quickHCC(326)">HCC 326 — CKD Stage 5</span>
+          <span class="hcc-quick-btn" onclick="quickHCC(1)">HCC 1 — HIV/AIDS</span>
+          <span class="hcc-quick-btn" onclick="quickHCC(125)">HCC 125 — Dementia</span>
+          <span class="hcc-quick-btn" onclick="quickHCC(280)">HCC 280 — ALS</span>
+          <span class="hcc-quick-btn" onclick="quickHCC(115)">HCC 115 — Lung Cancer</span>
+          <span class="hcc-quick-btn" onclick="quickHCC(84)">HCC 84 — Schizophrenia</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div id="radv-result" style="display:none"></div>
+
+    <!-- Static encounter reminder -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">CY2026 Encounter Eligibility — Universal Rules</div></div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Applies to ALL HCC families for non-PACE MA plans</div>
+        <div>
+          <span class="encounter-chip chip-ok">✓ Physician office E&M</span>
+          <span class="encounter-chip chip-ok">✓ Inpatient hospital</span>
+          <span class="encounter-chip chip-ok">✓ Outpatient hospital</span>
+          <span class="encounter-chip chip-ok">✓ FQHC / RHC</span>
+          <span class="encounter-chip chip-ok">✓ Video telehealth (with eligible CPT)</span>
+          <span class="encounter-chip chip-no">✕ Audio-only telehealth</span>
+          <span class="encounter-chip chip-no">✕ Labs / radiology alone</span>
+          <span class="encounter-chip chip-no">✕ Home health w/o face-to-face CPT</span>
+          <span class="encounter-chip chip-no">✕ SNF w/o face-to-face CPT</span>
+          <span class="encounter-chip chip-no">✕ Pathology-only encounter</span>
+        </div>
+        <div style="margin-top:14px;font-size:12px;color:var(--muted);font-family:var(--mono)">
+          Data source: Encounter data + FFS claims. RAPS not accepted for non-PACE in CY2026.
+          PACE plans: encounter data + RAPS (V22 legacy portion).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('hcc-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') lookupHCC();
+});
+
+function quickHCC(num) {
+  document.getElementById('hcc-input').value = String(num);
+  lookupHCC();
+}
+
+async function lookupHCC() {
+  const raw = document.getElementById('hcc-input').value.trim();
+  if (!raw) return;
+  const area = document.getElementById('radv-result');
+  area.style.display = 'block';
+  area.innerHTML = '<div style="display:flex;justify-content:center;padding:48px"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch('/portal/v28/radv-requirements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: raw })
+    });
+    const d = await r.json();
+    if (d.error) {
+      area.innerHTML = `<div style="color:var(--red);padding:20px;font-family:var(--mono);font-size:13px">⚠ ${d.error}</div>`;
+      return;
+    }
+    renderRADV(d);
+  } catch(e) {
+    area.innerHTML = `<div style="color:var(--red);padding:20px">Error: ${e.message}</div>`;
+  }
+}
+
+let _checklistState = {};
+
+function toggleCheck(el) {
+  el.classList.toggle('checked');
+  updateProgress();
+}
+
+function updateProgress() {
+  const items = document.querySelectorAll('.meat-item');
+  const checked = document.querySelectorAll('.meat-item.checked');
+  const pct = items.length ? Math.round(checked.length / items.length * 100) : 0;
+  const bar  = document.getElementById('progress-bar');
+  const lbl  = document.getElementById('progress-label');
+  if (bar) bar.style.width = pct + '%';
+  if (lbl) lbl.textContent = `${checked.length} / ${items.length} documented`;
+}
+
+function severityClass(sev) {
+  if (!sev) return 'sev-low';
+  const s = sev.toLowerCase();
+  if (s.includes('catastrophic')) return 'sev-catastrophic';
+  if (s.includes('high'))         return 'sev-high';
+  if (s.includes('moderate'))     return 'sev-moderate';
+  return 'sev-low';
+}
+
+function renderRADV(d) {
+  const area = document.getElementById('radv-result');
+  const reqs = d.radv_requirements || {};
+  const hcc  = d.hcc;
+  const desc = d.description || d.hcc_label || `HCC ${hcc}`;
+  const fam  = d.family || 'Unknown';
+  const sev  = d.severity || 'moderate';
+
+  // Build MEAT checklist
+  const meatDef = {
+    M: { label: 'Monitor',   hint: 'Evidence the condition is being tracked/watched' },
+    E: { label: 'Evaluate',  hint: 'Tests, assessments, labs ordered to evaluate condition' },
+    A: { label: 'Assess',    hint: 'Clinical judgment / assessment noted in provider note' },
+    T: { label: 'Treat',     hint: 'Active treatment — medications, procedures, referrals' },
+  };
+
+  const docReqs = reqs.required_documentation || [
+    'Physician-signed encounter note in the payment year',
+    'Active condition listed in Assessment/Plan section',
+    'MEAT criteria met for the diagnosis',
+    'Face-to-face encounter with eligible CPT/HCPCS',
+  ];
+
+  const traps = reqs.common_traps || [
+    'Diagnosis not in Assessment/Plan section (problem list only is insufficient)',
+    'Historical condition marked "resolved" or "rule out" — not reportable',
+    'Audio-only telehealth visit used as sole encounter source',
+    'Missing link between diagnosis and active treatment in the note',
+  ];
+
+  const keyDocs = reqs.key_documentation || [];
+
+  // MEAT items from reqs or defaults
+  const meatItems = {
+    M: reqs.monitoring_examples || ['Vital signs trending', 'Lab value tracking (e.g., HbA1c, BMP)', 'Symptom monitoring documentation'],
+    E: reqs.evaluation_examples || ['Diagnostic orders related to condition', 'Specialist referral for condition', 'Lab/imaging ordered for this diagnosis'],
+    A: reqs.assessment_examples || ['Condition explicitly in Assessment section of SOAP note', 'ICD-10 code linkage to provider assessment', 'Differential diagnosis addressing this condition'],
+    T: reqs.treatment_examples  || ['Active prescription(s) for this condition', 'Therapeutic procedure performed', 'Care plan with active interventions documented'],
+  };
+
+  const meatHtml = Object.entries(meatDef).map(([letter, {label, hint}]) => `
+    <div class="meat-section">
+      <div class="meat-letter">${letter} — ${label} <span>${hint}</span></div>
+      <ul class="meat-items">
+        ${meatItems[letter].map((item, i) => `
+          <li class="meat-item" onclick="toggleCheck(this)">
+            <div class="meat-check">✓</div>
+            <span>${item}</span>
+          </li>`).join('')}
+      </ul>
+    </div>`).join('');
+
+  const trapHtml = traps.map(t => `
+    <div class="trap-item">
+      <div class="trap-title">⚑ Audit Trap</div>
+      <div class="trap-body">${t}</div>
+    </div>`).join('');
+
+  // Hierarchy chain
+  const hierarchyHtml = d.hierarchy_chain && d.hierarchy_chain.length ? `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">V28 Hierarchy Chain — Code Suppression Risk</div>
+        <span style="font-size:12px;color:var(--orange);font-family:var(--mono)">Bill only the most specific code in each chain</span>
+      </div>
+      <div>
+        ${d.hierarchy_chain.map(c => `
+          <div class="chain-item">
+            <div class="chain-hcc ${c.role === 'parent' ? 'is-parent' : 'is-child'}">HCC ${c.hcc}</div>
+            <div class="chain-arrow">${c.role === 'parent' ? '▶ suppresses' : '▶ suppressed by'}</div>
+            <div class="chain-desc">${c.desc || ''}</div>
+            <span class="chain-role ${c.role === 'parent' ? 'role-parent' : 'role-child'}">${c.role.toUpperCase()}</span>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  area.innerHTML = `
+    <!-- HCC Header -->
+    <div class="hcc-header">
+      <div>
+        <div class="hcc-num-big">HCC ${hcc}</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">${desc}</div>
+        <div>
+          <span class="hcc-family-badge">${fam}</span>
+          <span class="severity-badge ${severityClass(sev)}" style="margin-left:8px">${sev.toUpperCase()}</span>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:4px">Approx. RAF Weight</div>
+        <div style="font-family:var(--mono);font-size:26px;font-weight:700;color:var(--orange)">${d.raf_weight ? d.raf_weight.toFixed(4) : '—'}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:4px">CY2026 V28 CMS-HCC</div>
+      </div>
+    </div>
+
+    ${hierarchyHtml}
+
+    <!-- MEAT Checklist -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">MEAT Documentation Checklist</div>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">Click items to mark as documented</span>
+      </div>
+      <div class="card-body">
+        <div class="checklist-progress">
+          <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
+          <div class="progress-label" id="progress-label">0 / 0 documented</div>
+        </div>
+        ${meatHtml}
+        <div style="margin-top:16px;font-size:12px;color:var(--muted);font-family:var(--mono)">
+          ⚑ All MEAT criteria must be met in the provider's note for the visit used as evidence. One strong criterion can satisfy audit if it clearly links diagnosis to active management.
+        </div>
+      </div>
+    </div>
+
+    <!-- Required Documentation -->
+    <div class="two-col" style="margin-bottom:20px">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-header"><div class="card-title">Required Documentation Elements</div></div>
+        <div class="card-body" style="padding:16px 22px">
+          <ul style="list-style:none;display:flex;flex-direction:column;gap:8px">
+            ${docReqs.map(r => `<li style="display:flex;gap:10px;font-size:13px;color:var(--subtle)"><span style="color:var(--green);flex-shrink:0">✓</span>${r}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-header"><div class="card-title">⚑ Common RADV Audit Failures</div></div>
+        <div class="card-body" style="padding:16px 22px">
+          ${trapHtml}
+        </div>
+      </div>
+    </div>
+
+    <!-- CMS spec note -->
+    <div style="background:rgba(6,182,212,.06);border:1px solid rgba(6,182,212,.2);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--cyan);margin-bottom:20px">
+      <strong>CMS Audit Standard (PY2020+):</strong> Annual RADV audits for all MA plans. Invalid HCC = recoupment of full payment for that HCC × plan enrollment count.
+      Documentation must be from a qualified provider in the payment year. Validate with RADV-ready EHR note templates for high-risk HCC families.
+    </div>
+  `;
+
+  // Initialize progress counter
+  setTimeout(updateProgress, 50);
+}
+</script>
+</body>
+</html>

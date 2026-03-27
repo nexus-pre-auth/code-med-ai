@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Member Risk Profile — CodeMed Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--blue:#2563EB;--blue-glow:#3B82F6;--cyan:#06B6D4;--green:#10B981;--red:#EF4444;--yellow:#F59E0B;--purple:#8B5CF6;--orange:#F97316;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.3;pointer-events:none}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;z-index:10;position:fixed;top:0;bottom:0}
+.logo{padding:24px 20px;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+.nav{padding:16px 12px;flex:1;overflow-y:auto}
+.nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(6,182,212,.12);color:var(--cyan);border-left:2px solid var(--cyan)}
+.nav-icon{width:16px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.status-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;box-shadow:0 0 6px var(--green)}
+.status-text{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.main{margin-left:220px;flex:1;z-index:1}
+.topbar{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(6,8,13,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:5}
+.page-title{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.page-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.content{padding:32px;max-width:1200px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.card-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600;letter-spacing:-.2px}
+.card-body{padding:22px}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:14px;border-radius:7px;padding:10px 14px;width:100%;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+select option{background:var(--surface2)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:7px;font-family:var(--font);font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
+.btn-cyan{background:var(--cyan);color:#000}
+.btn-cyan:hover{box-shadow:0 0 24px rgba(6,182,212,.4);opacity:.95}
+.btn-ghost{background:transparent;color:var(--subtle);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+.form-label{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.spinner{width:20px;height:20px;border:2px solid rgba(6,182,212,.3);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Profile header */
+.profile-header{background:linear-gradient(135deg,rgba(6,182,212,.08),rgba(37,99,235,.05));border:1px solid rgba(6,182,212,.2);border-radius:12px;padding:24px 28px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px}
+.profile-stat{text-align:center}
+.profile-stat-val{font-family:var(--mono);font-size:36px;font-weight:700;line-height:1;margin-bottom:4px}
+.profile-stat-label{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+
+/* RAF gauge */
+.raf-display{text-align:center;padding:20px 0}
+.raf-big{font-family:var(--mono);font-size:64px;font-weight:700;letter-spacing:-3px;line-height:1;color:var(--cyan)}
+.raf-adj{font-family:var(--mono);font-size:32px;font-weight:600;color:var(--purple);margin-top:8px}
+.raf-formula{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:8px;line-height:1.8}
+
+/* Code audit table */
+.audit-table{width:100%;border-collapse:collapse;font-size:13px}
+.audit-table th{padding:9px 14px;text-align:left;font-size:10.5px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)}
+.audit-table td{padding:10px 14px;border-bottom:1px solid rgba(30,36,53,.5);vertical-align:middle}
+.audit-table tr:last-child td{border-bottom:none}
+.audit-table tr:hover td{background:rgba(255,255,255,.015)}
+.status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:12px;font-family:var(--mono);font-size:11px;font-weight:600}
+.sb-valid{background:rgba(16,185,129,.12);color:var(--green);border:1px solid rgba(16,185,129,.25)}
+.sb-rejected{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.sb-suppressed{background:rgba(245,158,11,.1);color:var(--yellow);border:1px solid rgba(245,158,11,.2)}
+.sb-notfound{background:rgba(100,116,139,.12);color:var(--muted);border:1px solid var(--border)}
+.sb-notmapped{background:rgba(100,116,139,.12);color:var(--muted);border:1px solid var(--border)}
+
+/* Risk score panel */
+.risk-panel{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px}
+.risk-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+.risk-box-val{font-family:var(--mono);font-size:24px;font-weight:700;margin-bottom:3px}
+.risk-box-label{font-size:11px;color:var(--muted);font-family:var(--mono)}
+
+/* Opportunity rows */
+.opp-row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid rgba(30,36,53,.5);font-size:13px;cursor:pointer;transition:background .12s}
+.opp-row:last-child{border-bottom:none}
+.opp-row:hover{background:rgba(16,185,129,.04)}
+.opp-from{font-family:var(--mono);font-weight:700;color:var(--red);width:80px;flex-shrink:0}
+.opp-arrow{color:var(--muted);flex-shrink:0}
+.opp-to{font-family:var(--mono);font-weight:700;color:var(--green);width:80px;flex-shrink:0}
+.opp-desc{flex:1;color:var(--subtle);font-size:12px}
+.opp-raf{font-family:var(--mono);font-size:12px;color:var(--green);flex-shrink:0}
+.opp-tier{font-size:10px;padding:2px 7px;border-radius:8px;font-family:var(--mono);flex-shrink:0}
+.tier-critical{background:rgba(239,68,68,.15);color:var(--red)}
+.tier-high{background:rgba(245,158,11,.15);color:var(--yellow)}
+.tier-medium{background:rgba(16,185,129,.12);color:var(--green)}
+.tier-standard{background:rgba(100,116,139,.15);color:var(--muted)}
+
+/* RADV risk badge */
+.radv-high{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--red)}
+.radv-standard{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--green)}
+
+/* Interaction row */
+.ix-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid rgba(30,36,53,.5);font-size:13px}
+.ix-row:last-child{border-bottom:none}
+.ix-pair{font-family:var(--mono);font-weight:600;color:var(--yellow)}
+.ix-desc{flex:1;color:var(--subtle);font-size:12px}
+.ix-raf{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--yellow);flex-shrink:0}
+
+/* Two col grid */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+
+/* Sample preset chips */
+.preset-chip{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 10px;font-family:var(--mono);font-size:11px;color:var(--subtle);cursor:pointer;margin:3px;transition:all .15s}
+.preset-chip:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(6,182,212,.06)}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">CMG</div>
+      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.2 · HIPAA Compliant</div></div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Platform</div>
+    <a href="/" class="nav-item"><span class="nav-icon">⬡</span>Dashboard</a>
+    <a href="/chat" class="nav-item"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
+    <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
+    <a href="/appeals" class="nav-item"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Risk Adjustment</div>
+    <a href="/member" class="nav-item active"><span class="nav-icon">⬟</span>Member Risk Profile</a>
+    <a href="/raf" class="nav-item"><span class="nav-icon">◎</span>RAF Simulator</a>
+    <a href="/radv" class="nav-item"><span class="nav-icon">◈</span>RADV Audit Prep</a>
+    <div class="nav-section">Developer</div>
+    <a href="/docs" class="nav-item"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
+  </div>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span><span class="status-text">V28 2026 phase-in complete</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title">⬟ Member Risk Profile</div>
+      <div class="page-sub">Full V28 audit · RAF simulation · RADV risk · Revenue opportunities — one view</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Input card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Member Profile Input</div>
+        <span style="font-size:12px;color:var(--muted);font-family:var(--mono)">ICD-10 codes · CY2026 V28</span>
+      </div>
+      <div class="card-body">
+        <div class="three-col" style="margin-bottom:16px">
+          <div>
+            <div class="form-label">Age</div>
+            <input type="number" id="m-age" value="71" min="0" max="120">
+          </div>
+          <div>
+            <div class="form-label">Sex</div>
+            <select id="m-sex">
+              <option value="F">Female</option>
+              <option value="M">Male</option>
+            </select>
+          </div>
+          <div>
+            <div class="form-label">Plan Type</div>
+            <select id="m-plan">
+              <option value="non_pace">Non-PACE MA (100% V28)</option>
+              <option value="pace">PACE (10% V28 + 90% V22)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-label">ICD-10 Diagnosis Codes</div>
+        <textarea id="m-codes" rows="3" placeholder="One per line or comma-separated:&#10;E11.22, I50.23, N18.4, G30.0, F32.1"></textarea>
+        <div style="margin-top:10px;margin-bottom:4px;font-size:12px;color:var(--muted)">Member scenarios:</div>
+        <div>
+          <span class="preset-chip" onclick="loadScenario('complex_chronic')">Complex Chronic</span>
+          <span class="preset-chip" onclick="loadScenario('dm_ckd_hf')">DM + CKD + HF</span>
+          <span class="preset-chip" onclick="loadScenario('cancer')">Metastatic Cancer</span>
+          <span class="preset-chip" onclick="loadScenario('neuro_psych')">Neuro + Psych</span>
+          <span class="preset-chip" onclick="loadScenario('hierarchy_risk')">Hierarchy Risk Demo</span>
+          <span class="preset-chip" onclick="loadScenario('high_value')">High-Value Member</span>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <button class="btn btn-cyan" onclick="runProfile()" style="flex:1">⬟ Generate Risk Profile</button>
+          <button class="btn btn-ghost" onclick="clearProfile()">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="profile-result" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const SCENARIOS = {
+  complex_chronic:  'E11.22\nI50.23\nN18.4\nG30.0\nJ44.1\nF32.1\nI48.19',
+  dm_ckd_hf:        'E11.22\nN18.5\nI50.32\nI12.9\nE11.65',
+  cancer:           'C78.7\nC34.12\nZ79.899\nI50.22',
+  neuro_psych:      'G12.21\nG30.0\nF20.9\nF31.31\nG40.909',
+  hierarchy_risk:   'I50.9\nI50.23\nI50.22\nI50.32',
+  high_value:       'B20\nC34.12\nI50.23\nN18.5\nE11.22\nG30.0\nF20.9',
+};
+
+function loadScenario(key) {
+  document.getElementById('m-codes').value = SCENARIOS[key] || '';
+}
+
+function clearProfile() {
+  document.getElementById('m-codes').value = '';
+  document.getElementById('profile-result').style.display = 'none';
+}
+
+async function runProfile() {
+  const raw  = document.getElementById('m-codes').value.trim();
+  const age  = parseInt(document.getElementById('m-age').value) || 70;
+  const sex  = document.getElementById('m-sex').value;
+  const plan = document.getElementById('m-plan').value;
+  if (!raw) return;
+
+  const codes = raw.split(/[\n,]+/).map(c => c.trim().toUpperCase()).filter(Boolean);
+  const area  = document.getElementById('profile-result');
+  area.style.display = 'block';
+  area.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:60px;color:var(--muted);font-family:var(--mono);font-size:13px"><div class="spinner"></div>Running V28 audit, RAF simulation, RADV analysis…</div>`;
+
+  try {
+    const r = await fetch('/portal/member/risk-profile', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ icd10_codes: codes, age, sex, plan_type: plan })
+    });
+    const d = await r.json();
+    if (d.error) {
+      area.innerHTML = `<div style="color:var(--red);padding:20px;font-family:var(--mono)">${d.error}</div>`;
+      return;
+    }
+    renderProfile(d, age, sex, plan, codes);
+  } catch(e) {
+    area.innerHTML = `<div style="color:var(--red);padding:20px">Error: ${e.message}</div>`;
+  }
+}
+
+function sb(status, suppressed) {
+  if (suppressed) return '<span class="status-badge sb-suppressed">⚑ SUPPRESSED</span>';
+  const m = {
+    'VALID':      '<span class="status-badge sb-valid">● VALID</span>',
+    'REJECTED':   '<span class="status-badge sb-rejected">✕ REJECTED</span>',
+    'NOT_MAPPED': '<span class="status-badge sb-notmapped">◌ NOT MAPPED</span>',
+    'NOT_FOUND':  '<span class="status-badge sb-notfound">? NOT FOUND</span>',
+  };
+  return m[status] || `<span class="status-badge sb-notfound">${status}</span>`;
+}
+
+function renderProfile(d, age, sex, plan, inputCodes) {
+  const raf       = d.raf || {};
+  const audit     = d.audit || {};
+  const totalRaf  = (raf.total_raf || 0).toFixed(4);
+  const adjRaf    = (raf.adjusted_raf || 0).toFixed(4);
+  const demoRaf   = (raf.demographic_raf || 0).toFixed(4);
+  const hccRaf    = (raf.hcc_raf || 0).toFixed(4);
+  const intRaf    = (raf.interaction_raf || 0).toFixed(4);
+  const normF     = raf.normalization_factor || 1.067;
+  const planLabel = plan === 'pace' ? 'PACE' : 'Non-PACE MA';
+
+  const suppressed = new Set((raf.suppressed_hccs || []).map(s => s.hcc || s));
+  const validCodes = (audit.results || []).filter(r => r.status === 'VALID');
+  const rejCodes   = (audit.results || []).filter(r => r.status === 'REJECTED');
+  const hccDetails = raf.hcc_details || [];
+  const interactions = raf.interactions || [];
+  const radvRisk = d.radv_risk || (suppressed.size > 0 ? 'HIGH' : 'STANDARD');
+  const opps = d.revenue_opportunities || [];
+
+  // Code audit rows
+  const auditRows = (audit.results || []).map(r => {
+    const isSuppressed = suppressed.has(r.v28_hcc ? parseInt(r.v28_hcc) : -1);
+    const topUpgrade = (r.upgrade_suggestions || [])[0];
+    return `<tr>
+      <td style="font-family:var(--mono);font-weight:700;color:var(--cyan);font-size:13px">${r.code}</td>
+      <td style="color:var(--subtle);font-size:12px;max-width:240px">${(r.description || r.message || '').slice(0,60)}</td>
+      <td>${sb(r.status, isSuppressed && r.status === 'VALID')}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--muted)">${r.v28_hcc || '—'}</td>
+      <td style="font-size:12px">
+        ${r.status === 'REJECTED' && topUpgrade
+          ? `<span style="font-family:var(--mono);color:var(--green);font-size:12px">→ ${topUpgrade.icd10_code}</span>`
+          : '—'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Interaction rows
+  const intRows = interactions.map(i =>
+    `<div class="ix-row">
+      <div class="ix-pair">HCC ${i.hcc1} × ${i.hcc2}</div>
+      <div class="ix-desc">${i.description || ''}</div>
+      <div class="ix-raf">+${(i.raf || 0).toFixed(4)}</div>
+    </div>`
+  ).join('');
+
+  // Revenue opportunity rows
+  const oppRows = opps.map(o =>
+    `<div class="opp-row">
+      <div class="opp-from">${o.from_code}</div>
+      <div class="opp-arrow">→</div>
+      <div class="opp-to">${o.to_code}</div>
+      <div class="opp-desc">${(o.description || '').slice(0,60)}</div>
+      ${o.hcc ? `<span style="font-size:11px;color:var(--muted);font-family:var(--mono);flex-shrink:0">HCC ${o.hcc}</span>` : ''}
+      <span class="opp-tier tier-${o.tier || 'standard'}">${(o.tier || 'standard').toUpperCase()}</span>
+    </div>`
+  ).join('');
+
+  const radvBanner = radvRisk === 'HIGH'
+    ? `<div class="radv-high"><strong>⚑ RADV RISK: HIGH</strong> — ${suppressed.size} HCC(s) suppressed by hierarchy. Submitting parent + child codes is a common RADV audit finding. Review with <a href="/radv" style="color:var(--red);text-decoration:underline">RADV Audit Prep</a>.</div>`
+    : `<div class="radv-standard"><strong>✓ RADV RISK: STANDARD</strong> — No hierarchy violations detected in this code set.</div>`;
+
+  document.getElementById('profile-result').innerHTML = `
+
+    <!-- Profile header bar -->
+    <div class="profile-header">
+      <div class="profile-stat">
+        <div class="profile-stat-val" style="color:var(--cyan)">${adjRaf}</div>
+        <div class="profile-stat-label">Adjusted RAF</div>
+      </div>
+      <div class="profile-stat">
+        <div class="profile-stat-val" style="color:var(--text)">${totalRaf}</div>
+        <div class="profile-stat-label">Raw RAF</div>
+      </div>
+      <div class="profile-stat">
+        <div class="profile-stat-val" style="color:${radvRisk==='HIGH'?'var(--red)':'var(--green)'}">${radvRisk}</div>
+        <div class="profile-stat-label">RADV Risk</div>
+      </div>
+      <div class="profile-stat">
+        <div class="profile-stat-val" style="color:var(--${opps.length?'yellow':'muted')}">${opps.length}</div>
+        <div class="profile-stat-label">Revenue Opps</div>
+      </div>
+    </div>
+
+    ${radvBanner}
+
+    <!-- RAF breakdown + Code summary side by side -->
+    <div class="two-col">
+      <!-- RAF breakdown -->
+      <div class="card" style="margin-bottom:0">
+        <div class="card-header">
+          <div class="card-title">RAF Breakdown</div>
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${planLabel} · Age ${age} ${sex==='F'?'♀':'♂'}</span>
+        </div>
+        <div class="card-body">
+          <div class="raf-display">
+            <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:4px">ADJUSTED RAF (post-norm + coding adj)</div>
+            <div class="raf-adj">${adjRaf}</div>
+            <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:4px">× ${normF} norm · × 0.941 coding adj (5.90%)</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+            ${[
+              ['Demographic', demoRaf, 'var(--blue-glow)'],
+              ['HCC Weights', hccRaf, 'var(--cyan)'],
+              ['Interactions', '+'+intRaf, 'var(--yellow)'],
+              ['Total Raw', totalRaf, 'var(--text)'],
+            ].map(([label, val, color]) => `
+              <div style="display:flex;justify-content:space-between;padding:8px 12px;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:6px">
+                <span style="font-size:12px;color:var(--subtle)">${label}</span>
+                <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${val}</span>
+              </div>`).join('')}
+          </div>
+          ${hccDetails.length ? `
+          <div style="margin-top:14px">
+            <div style="font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">HCCs Scoring</div>
+            ${hccDetails.map(h => `
+              <div style="display:flex;justify-content:space-between;padding:6px 10px;font-size:12px;border-bottom:1px solid rgba(30,36,53,.5)">
+                <span><span style="font-family:var(--mono);color:var(--cyan);font-weight:600">HCC ${h.hcc}</span> <span style="color:var(--muted)">${(h.desc||'').slice(0,38)}</span></span>
+                <span style="font-family:var(--mono);color:var(--text);font-weight:600">+${(h.raf_weight||0).toFixed(4)}</span>
+              </div>`).join('')}
+          </div>` : ''}
+        </div>
+      </div>
+
+      <!-- Code audit summary -->
+      <div class="card" style="margin-bottom:0">
+        <div class="card-header">
+          <div class="card-title">Code Audit Summary</div>
+          <span style="font-size:11px;font-family:var(--mono);color:var(--muted)">${inputCodes.length} codes submitted</span>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:16px 20px;gap:12px;border-bottom:1px solid var(--border)">
+            <div style="text-align:center">
+              <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--green)">${audit.valid||0}</div>
+              <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">Valid V28</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--red)">${audit.rejected||0}</div>
+              <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">Rejected</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--muted)">${audit.not_found||0}</div>
+              <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">Not Found</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="audit-table">
+              <thead><tr><th>Code</th><th>Description</th><th>Status</th><th>HCC</th><th>Top Upgrade</th></tr></thead>
+              <tbody>${auditRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    ${interactions.length ? `
+    <!-- Interaction bonuses -->
+    <div class="card" style="margin-top:20px">
+      <div class="card-header">
+        <div class="card-title">⚡ Disease Interaction Bonuses</div>
+        <span style="font-size:12px;color:var(--yellow);font-family:var(--mono)">+${intRaf} total interaction RAF</span>
+      </div>
+      <div>${intRows}</div>
+    </div>` : ''}
+
+    ${opps.length ? `
+    <!-- Revenue opportunities -->
+    <div class="card" style="margin-top:${interactions.length?0:20}px">
+      <div class="card-header">
+        <div class="card-title">⚡ Revenue Opportunities</div>
+        <span style="font-size:11px;color:var(--yellow);font-family:var(--mono)">${opps.length} upgrade path${opps.length>1?'s':''} — verify clinical accuracy before coding</span>
+      </div>
+      <div>${oppRows}</div>
+      <div style="padding:12px 16px;font-size:11px;color:var(--muted);font-family:var(--mono);border-top:1px solid var(--border)">
+        ⚠ Code upgrades only when clinically accurate and documented in the medical record. RADV requires MEAT evidence.
+      </div>
+    </div>` : ''}
+
+    <!-- Quick links -->
+    <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+      <a href="/radv" class="btn btn-ghost" style="font-size:12px;text-decoration:none">◈ RADV Audit Prep →</a>
+      <a href="/raf" class="btn btn-ghost" style="font-size:12px;text-decoration:none">◎ RAF Simulator →</a>
+      <a href="/v28" class="btn btn-ghost" style="font-size:12px;text-decoration:none">◉ V28 Checker →</a>
+      <a href="/appeals" class="btn btn-ghost" style="font-size:12px;text-decoration:none">◎ Appeal Generator →</a>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

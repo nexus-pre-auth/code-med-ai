@@ -127,6 +127,49 @@ CREATE TRIGGER IF NOT EXISTS hipaa_ai AFTER INSERT ON hipaa_corpus BEGIN
     INSERT INTO hipaa_fts(rowid, source_id, title, section, content_text, summary_text)
     VALUES (new.id, new.source_id, new.title, new.section, new.content_text, new.summary_text);
 END;
+
+-- V28 HCC category reference (115 payment HCCs with metadata)
+CREATE TABLE IF NOT EXISTS v28_hcc_categories (
+    hcc_number       INTEGER PRIMARY KEY,
+    description      TEXT NOT NULL,
+    disease_family   TEXT,
+    severity         TEXT DEFAULT 'standard',
+    raf_weight       REAL DEFAULT 0.0,
+    hierarchy_group  TEXT,
+    created_at       TEXT DEFAULT (datetime('now'))
+);
+
+-- CMS model configuration: normalization factors, MA coding adjustment, PACE blend
+CREATE TABLE IF NOT EXISTS cms_model_config (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    config_year      INTEGER NOT NULL,
+    config_key       TEXT NOT NULL,
+    config_value     TEXT NOT NULL,
+    description      TEXT,
+    source           TEXT,
+    UNIQUE(config_year, config_key)
+);
+
+-- Portal user accounts (optional auth — enforced via REQUIRE_AUTH env var)
+CREATE TABLE IF NOT EXISTS users (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    email        TEXT NOT NULL UNIQUE,
+    name         TEXT NOT NULL,
+    password     TEXT NOT NULL,
+    role         TEXT DEFAULT 'user',
+    active       INTEGER DEFAULT 1,
+    created_at   TEXT DEFAULT (datetime('now'))
+);
+
+-- Encounter-eligible CPT/HCPCS codes for V28 encounter filtering
+-- Loaded from CMS ZIP: 2026-medicare-advantage-risk-adjustment-eligible-cpt-hcpcs-codes.zip
+CREATE TABLE IF NOT EXISTS v28_eligible_cpt (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    code             TEXT NOT NULL UNIQUE,
+    code_type        TEXT DEFAULT 'CPT',
+    description      TEXT,
+    eligible_year    INTEGER DEFAULT 2026
+);
 """
 
 DOCUMENTS = [
@@ -572,6 +615,534 @@ CPT Codes:
         "specialties": json.dumps(["behavioral_health","neurology"]),
         "confidence_score": 0.92, "effective_date": "2024-01-01",
     },
+    # ── Cardiovascular Surgery Coding (CABG, Pacemakers, Vascular) ─────────────
+    {
+        "source_id": "CMS-CV-CODING-2026", "source_type": "coding_guide",
+        "title": "Cardiovascular Surgery CPT Coding Guidelines — CABG, Pacemakers, Vascular (2026)",
+        "document_type": "coding_guide", "payer_code": "CMS",
+        "content_text": """Cardiovascular Surgery CPT Coding Guidelines — CY2026
+
+PACEMAKERS & DEFIBRILLATORS (CPT 33202–33249):
+
+Implantation Approach — Always Distinguish:
+- Transvenous: catheter threaded through veins into the heart (standard; lower morbidity)
+- Epicardial: direct access through chest wall via sternotomy or thoracoscope (used when transvenous not feasible)
+- Code selection depends on approach; documentation must state transvenous vs epicardial explicitly
+
+Key Pacemaker Codes:
+- 33206: Insertion of new or replacement pacemaker — atrial
+- 33207: Insertion of new or replacement pacemaker — ventricular
+- 33208: Insertion of new or replacement pacemaker — dual-chamber
+- 33213: Insertion of pacemaker pulse generator — dual-chamber
+- 33214: Upgrade from single-chamber to dual-chamber system — includes removal of old generator, lead testing, new lead and generator insertion. Do not unbundle.
+- 33227: Removal and replacement of pacemaker pulse generator — single lead
+- 33228: Removal and replacement — dual lead
+- 33229: Removal and replacement — multiple leads
+
+CORONARY ARTERY BYPASS GRAFTING (CABG) (CPT 33510–33536):
+
+Critical Coding Rule — Conduit Types Determine Code Family:
+- Arterial grafts only → 33533–33536 series (per artery)
+- Venous grafts only → 33510–33516 series (per vein)
+- BOTH arterial AND venous → Combined arterial-venous series 33517–33523
+  WARNING: NEVER use veins-only series (33510–33516) when arterial conduit is also present. This is a common audit trigger.
+
+Harvesting Rules:
+- Lower extremity vein (saphenous): BUNDLED into primary CABG code — do NOT add separately
+- Upper extremity artery (radial artery, 35600): separately reportable add-on — document explicitly
+- Endoscopic harvest (33508): separately reportable for vein; document approach
+
+CPT Reference:
+- 33517: Single vein with single arterial
+- 33518: Two veins with single arterial
+- 33519: Three veins with single arterial
+- 33521: Single vein with two arterials
+- 33522: Two veins with two arterials
+- 33523: Three or more veins with two or more arterials
+- 33533: Arterial graft, single
+- 33534: Arterial graft, two
+- 33535: Arterial graft, three
+- 33536: Arterial graft, four or more
+- 35600: Harvest of upper extremity artery (add-on)
+- 33508: Endoscopic harvest of vein (add-on)
+
+VASCULAR SELECTIVE CATHETERIZATION (CPT 36100–37799):
+CMS Appendix L — Order-Based Selectivity Rules:
+- Non-selective: catheter tip remains in aorta, vena cava, or the vessel punctured → code 36200 (aorta)
+- 1st-order selective: catheter tip in main branch directly off aorta (e.g., celiac axis, SMA, renal artery) → code 36245 (1st order)
+- 2nd-order selective: catheter moved into a branch of a 1st-order vessel (e.g., left hepatic from celiac) → code 36246
+- 3rd-order selective: moved into a branch of a 2nd-order vessel → code 36247
+- Beyond 3rd order: 36248 (add-on for each beyond 3rd within same family)
+
+Key Rules:
+1. Code the HIGHEST order reached within each vascular family
+2. Code each vascular family INDEPENDENTLY — do not mix orders across families
+3. Supervision and interpretation of fluoroscopy (76000) may be separately reportable
+4. Roadmap or documentation of catheter position required for selective code justification
+
+ICD-10 Codes Supporting Cardiovascular Procedures:
+I25.10 - Atherosclerotic heart disease, native vessel
+I25.110 - Atherosclerotic heart disease, native vessel with unstable angina
+I21.3 - ST elevation MI, unspecified
+Z95.1 - Presence of aortocoronary bypass graft
+Z95.0 - Presence of cardiac pacemaker
+I49.9 - Cardiac arrhythmia, unspecified
+I50.9 - Heart failure, unspecified""",
+        "indication_text": "CABG coronary bypass graft arterial venous pacemaker defibrillator ICD cardiovascular vascular catheterization selective upgrade",
+        "coding_text": "CPT 33206-33249 pacemakers; CPT 33510-33536 CABG; CPT 35600 radial harvest; CPT 33508 endoscopic vein; CPT 36200-36248 vascular selective catheterization; Modifier 22 increased services",
+        "cpt_codes": json.dumps(["33206","33207","33208","33213","33214","33227","33228","33229",
+                                  "33510","33511","33512","33513","33514","33516",
+                                  "33517","33518","33519","33521","33522","33523",
+                                  "33533","33534","33535","33536",
+                                  "33508","35600",
+                                  "36200","36245","36246","36247","36248"]),
+        "icd10_codes": json.dumps(["I25.10","I25.110","I21.3","Z95.1","Z95.0","I49.9","I50.9"]),
+        "specialties": json.dumps(["cardiac_surgery","cardiology","vascular_surgery","interventional_radiology"]),
+        "confidence_score": 0.97, "effective_date": "2026-01-01",
+    },
+    # ── Digestive System Coding (Endoscopy, Resection, Adhesions) ───────────────
+    {
+        "source_id": "CMS-GI-CODING-2026", "source_type": "coding_guide",
+        "title": "Digestive System CPT Coding Guidelines — Endoscopy, Resection, Adhesions (2026)",
+        "document_type": "coding_guide", "payer_code": "CMS",
+        "content_text": """Digestive System CPT Coding Guidelines — CY2026
+
+ENDOSCOPY — ANATOMY GOVERNS THE CODE, NOT THE INSTRUMENT:
+
+Key Principle: Code based on the ANATOMY VIEWED and REACHED, not the name of the scope used.
+
+Colonoscopy (CPT 45378–45398):
+- DEFINITION: Colonoscopy = scope reaches the CECUM (or the anastomosis in resected colon cases)
+- If cecum is NOT reached → code as flexible sigmoidoscopy (45330 series), not colonoscopy
+- Documentation MUST include: anatomic landmarks (cecum confirmed, hepatic flexure, splenic flexure, terminal ileum if examined)
+- 45378: Colonoscopy, diagnostic
+- 45379: Colonoscopy, with removal of foreign body
+- 45380: Colonoscopy, with biopsy
+- 45381: Colonoscopy, with directed submucosal injection
+- 45382: Colonoscopy, with control of bleeding
+- 45384: Colonoscopy, with removal of lesion by hot biopsy
+- 45385: Colonoscopy, with removal of polyp by snare
+- 45386: Colonoscopy, with balloon dilation
+- 45388: Colonoscopy, with ablation of tumor/polyp/lesion
+- 45390: Colonoscopy, with endoscopic mucosal resection (EMR)
+- 45398: Colonoscopy, with band ligation
+
+Flexible Sigmoidoscopy (CPT 45330–45342):
+- Scope reaches sigmoid colon / descending colon — cecum NOT required
+- 45330: Diagnostic sigmoidoscopy
+- 45331: Sigmoidoscopy with biopsy
+
+Upper GI Endoscopy (Esophagogastroduodenoscopy, EGD) (CPT 43235–43259):
+- Scope passes through esophagus into duodenum
+- 43235: EGD, diagnostic
+- 43239: EGD, with biopsy
+- 43255: EGD, with control of bleeding (thermal/injection)
+
+ADHESION LYSIS (CPT 44005):
+- 44005: Enterolysis — lysis of extensive intestinal adhesions
+- Add Modifier 22 (Increased Procedural Services) when:
+  • Work is unusually time-consuming and tedious
+  • Documentation: operative note must describe the extent of adhesions, estimated extra time, and complexity relative to a typical case
+  • Modifier 22 without supporting documentation is a frequent audit denial target
+- Bundling: Do not separately code adhesiolysis if performed as a necessary component of the primary procedure (e.g., bowel resection) unless it constitutes a distinct, time-consuming service
+
+SMALL INTESTINE RESECTIONS (CPT 44120–44128):
+- 44120: Enterectomy, resection of small intestine, single resection and anastomosis
+- 44121: Each additional resection and anastomosis (ADD-ON — use with 44120)
+  RULE: For multiple resections, use 44120 once + 44121 × (n−1) additional resections
+  WRONG: Multiple units of 44120
+  RIGHT: 44120 (first) + 44121 (each additional)
+- 44125: Enterectomy with cutaneous enterostomy (no anastomosis)
+- 44126: Enterectomy with enteric anastomosis — reduction of congenital atresia
+
+APPENDECTOMY:
+- 44950: Appendectomy
+- 44955: Appendectomy — for indicated purpose, performed at time of another procedure (add-on)
+- 44960: Appendectomy — ruptured appendix with abscess or generalized peritonitis
+
+Modifier Rules for Digestive:
+- Modifier 51 (Multiple Procedures): Apply to secondary procedures in same session; do not apply to add-on codes
+- Modifier 22: Use for increased complexity — must document rationale
+- Modifier 58: Staged/related procedure during postoperative period
+
+ICD-10 Codes — Digestive:
+K57.30 - Diverticulosis, large intestine, without perforation/abscess
+K92.1 - Melena (lower GI bleeding)
+K63.5 - Polyp of colon
+Z12.11 - Encounter for screening for malignant neoplasm of colon
+K56.60 - Unspecified intestinal obstruction
+K65.0 - Generalized acute peritonitis""",
+        "indication_text": "colonoscopy cecum sigmoidoscopy EGD endoscopy digestive bowel resection adhesions enterolysis small intestine anastomosis appendectomy",
+        "coding_text": "CPT 45378-45398 colonoscopy; CPT 45330 sigmoidoscopy; CPT 43235-43259 EGD; CPT 44005 enterolysis Modifier 22; CPT 44120-44121 small intestine resection add-on",
+        "cpt_codes": json.dumps(["45378","45379","45380","45381","45382","45384","45385","45386",
+                                  "45388","45390","45398","45330","45331",
+                                  "43235","43239","43255",
+                                  "44005","44120","44121","44125","44126",
+                                  "44950","44955","44960"]),
+        "icd10_codes": json.dumps(["K57.30","K92.1","K63.5","Z12.11","K56.60","K65.0"]),
+        "specialties": json.dumps(["gastroenterology","colorectal_surgery","general_surgery"]),
+        "confidence_score": 0.96, "effective_date": "2026-01-01",
+    },
+    # ── MIPS & HIPAA Security Rule (CMS-1832-F 2026) ────────────────────────────
+    {
+        "source_id": "CMS-MIPS-HIPAA-2026", "source_type": "compliance_guide",
+        "title": "MIPS HIPAA Security Rule Attestation Requirements — CMS-1832-F 2026",
+        "document_type": "compliance_guide", "payer_code": "CMS",
+        "content_text": """MIPS HIPAA Security Rule Attestation — CY2026 Physician Fee Schedule (CMS-1832-F)
+
+REQUIREMENT OVERVIEW:
+The CY2026 Physician Fee Schedule (CMS-1832-F) mandates HIPAA Security Rule attestations as a MIPS measure. Eligible clinicians must formally attest to completing a risk analysis and implementing a risk management plan.
+
+TWO MANDATORY ATTESTATION COMPONENTS:
+1. Risk Analysis Completion
+   - A formal, documented Security Risk Analysis (SRA) must be completed
+   - Must assess threats and vulnerabilities to all ePHI (electronic Protected Health Information)
+   - Must cover all systems, applications, and devices that create, receive, maintain, or transmit ePHI
+   - Frequency: must be current — conducted within the performance year or documented update
+
+2. Risk Management Plan Implementation
+   - A written Risk Management Plan addressing identified risks must be in place
+   - Plan must document security measures implemented to reduce risks to reasonable and appropriate levels
+   - Workforce training records documenting HIPAA Security Rule training
+
+AUDIT DOCUMENTATION REQUIREMENTS:
+- Signed attestation in MIPS submission portal
+- Evidence of SRA completion date and methodology
+- Risk Management Plan document with implementation status
+- Workforce training logs showing completion dates
+
+DENIAL / NON-COMPLIANCE CONSEQUENCES:
+- Missing HIPAA Security attestation in MIPS = MIPS penalty (negative payment adjustment)
+- CY2026: MIPS negative adjustment for low performers up to −9%
+- OIG audits can independently cite missing SRA as HIPAA Security Rule violation (45 CFR §164.308(a)(1))
+
+RELEVANT REGULATIONS:
+- 45 CFR §164.308(a)(1): Administrative safeguards — risk analysis required
+- 45 CFR §164.308(a)(2): Risk management — must implement measures to reduce identified risks
+- CMS-1832-F: Final rule mandating MIPS attestation for HIPAA Security compliance
+- HIPAA Security Rule (45 CFR Part 164, Subpart C)
+
+PRACTICAL CHECKLIST FOR COMPLIANCE:
+1. Complete or update Security Risk Analysis (SRA) — use ONC SRA Tool or equivalent
+2. Document all ePHI systems (EHR, billing software, cloud storage, mobile devices)
+3. Create/update Risk Management Plan with prioritized remediation steps
+4. Complete staff HIPAA Security training — retain sign-in sheets or LMS completion records
+5. Attest in MIPS Quality Payment Program (QPP) portal before submission deadline
+
+ICD-10/CPT: Not applicable — compliance measure, not a clinical code set""",
+        "indication_text": "MIPS HIPAA Security Rule attestation risk analysis risk management plan CMS-1832-F PHI ePHI compliance penalty QPP Quality Payment Program",
+        "coding_text": "MIPS compliance measure — no CPT/ICD codes. References 45 CFR §164.308; CMS-1832-F; ONC SRA Tool",
+        "cpt_codes": json.dumps([]),
+        "icd10_codes": json.dumps([]),
+        "specialties": json.dumps(["compliance","health_it","practice_management"]),
+        "confidence_score": 0.95, "effective_date": "2026-01-01",
+    },
+    # ── Part D Redesign 2026 ─────────────────────────────────────────────────────
+    {
+        "source_id": "CMS-PARTD-REDESIGN-2026", "source_type": "policy_guidance",
+        "title": "CY2026 Part D Drug Benefit Redesign — Program Instructions & IRA Implementation",
+        "document_type": "policy_guidance", "payer_code": "CMS",
+        "content_text": """CY2026 Part D Drug Benefit Redesign — Program Instructions
+
+BACKGROUND:
+The Inflation Reduction Act (IRA) significantly restructured the Medicare Part D drug benefit. CY2026 Part D Redesign Program Instructions continue the phased implementation.
+
+KEY 2026 CHANGES:
+1. $2,000 Annual Out-of-Pocket Cap (effective 2025, continuing 2026)
+   - Medicare beneficiaries' annual out-of-pocket drug costs capped at $2,000
+   - Eliminates the previous "donut hole" / coverage gap phase
+   - Medicare Prescription Payment Plan (M3P): allows beneficiaries to spread OOP costs across the year in monthly installments
+
+2. Drug Manufacturer Price Negotiation
+   - CMS negotiating prices for high-expenditure drugs (Initial Price Applicability Year 2026 drugs added to negotiation list)
+   - Negotiated Maximum Fair Prices (MFPs) apply at point of sale
+
+3. Inflation Rebates
+   - Manufacturers must pay rebates if drug prices increase faster than inflation
+   - Passed through as benefit enhancements
+
+4. Enhanced Low-Income Subsidy (LIS/Extra Help)
+   - Expanded eligibility thresholds continue in 2026
+   - Full LIS (benchmark) beneficiaries have $0 copays for generics
+
+5. Formulary & Coverage Guidance
+   - Plans must cover all Part D covered drugs (except excluded) or provide meaningful therapeutic alternative
+   - Generic/biosimilar utilization initiatives incentivized
+   - Step therapy and prior authorization rules subject to CMS oversight
+
+PLAN DESIGN REQUIREMENTS:
+- TrOOP (True Out-of-Pocket) tracking modified to reflect $2,000 cap
+- Catastrophic phase: beneficiary 0% cost sharing after OOP cap reached
+- Sponsor liability increases in catastrophic phase
+- DIR (Direct and Indirect Remuneration) fees: point-of-sale pass-through required
+
+BILLING IMPLICATIONS:
+- PDE (Prescription Drug Event) records must accurately reflect negotiated prices and rebates
+- Formulary exception requests: plans must process within 24 hours (urgent) or 72 hours (standard)
+- Prior authorization denials for covered Part D drugs: use coverage determination process, then redetermination, then IRE appeal
+
+PART D RxHCC CONTEXT (V28 integration):
+- Non-PACE MA-PD plans: RxHCC V08 record type 6 in MOR/MMR
+- PACE plans: RxHCC V08 records 6 and 7
+- RxHCC normalization factor (2026): 1.194 (MA-PD)""",
+        "indication_text": "Part D drug benefit redesign IRA Inflation Reduction Act out of pocket cap OOP $2000 Medicare prescription payment plan formulary prior authorization step therapy generic biosimilar LIS extra help",
+        "coding_text": "Part D coverage determination; formulary exception; PDE records; TrOOP tracking; RxHCC V08; HCPCS J-codes for drugs",
+        "cpt_codes": json.dumps([]),
+        "icd10_codes": json.dumps([]),
+        "specialties": json.dumps(["pharmacy","part_d","managed_care"]),
+        "confidence_score": 0.94, "effective_date": "2026-01-01",
+    },
+    # ── CMS Strategic Framework 2026 ────────────────────────────────────────────
+    {
+        "source_id": "CMS-STRATEGY-2026", "source_type": "strategic_framework",
+        "title": "CMS Strategic Framework — 150 Million Beneficiaries, 6 Pillars, Cross-Cutting Initiatives (2026)",
+        "document_type": "strategic_framework", "payer_code": "CMS",
+        "content_text": """CMS Strategic Framework & Operational Context — CY2026
+
+SCALE & SCOPE:
+- CMS administers coverage for 150 million Americans
+- Programs: Medicare (Part A, B, C, D), Medicaid, CHIP, Marketplace (ACA plans)
+- Budget: largest payer in the US healthcare system
+
+SIX STRATEGIC PILLARS:
+1. Advance Equity
+   - Address disparities in care by race, ethnicity, disability, language, geography
+   - Health equity data collection mandates in claims and quality reporting
+   - Special needs plans (D-SNPs, C-SNPs, I-SNPs) focus on vulnerable populations
+
+2. Expand Access
+   - Telehealth expansion (video-enabled) maintained post-COVID permanently in MA
+   - FQHC and RHC reimbursement enhancement
+   - Behavioral health integration requirements in MA plan benefits
+
+3. Engage Partners
+   - Value-based care models (ACO REACH, MSSP, CMMI models)
+   - State Medicaid partnerships and 1115 waiver support
+   - Provider enrollment and credentialing modernization
+
+4. Drive Innovation
+   - CMMI Center for Medicare and Medicaid Innovation — mandatory/voluntary payment models
+   - AI/ML in clinical decision support: CMS transparency rules for algorithm-assisted PA decisions
+   - Digital health coverage policies evolving
+
+5. Protect Programs
+   - Program integrity: RAC audits, UPIC investigations, MAC reviews
+   - RADV audits: PY2020+ annual for ALL MA plans
+   - MIPS anti-gaming provisions
+   - HIPAA Security attestation in MIPS (see CMS-1832-F)
+
+6. Foster Excellence
+   - Quality measurement: STAR ratings for MA, HEDIS, CAHPS
+   - Value-Based Insurance Design (VBID): targeted benefit enhancements for high-value services
+   - Workforce training and provider education
+
+CROSS-CUTTING STRATEGIC INITIATIVES:
+
+Behavioral Health Integration:
+- MA plans required to offer mental health and SUD benefits comparable to medical/surgical
+- Mental Health Parity and Addiction Equity Act (MHPAEA) enforcement increased
+- Collaborative care management codes (CPT 99492–99494) covered
+- ICD-10 codes: F-codes (F20–F99) must be V28-compliant for risk adjustment
+
+Drug Affordability:
+- Generic first / step therapy protocols encouraged (not required for protected drug classes)
+- Biosimilar interchangeability: dispensing permitted without separate prescriber authorization
+- Part D rebate transparency to beneficiaries
+
+Maternity Care:
+- Extended postpartum Medicaid coverage (12 months) per ARP
+- Maternal mortality disparities initiative — SDOH Z-codes encouraged in claims
+- ICD-10: Z34.x (supervision of normal pregnancy), O codes (obstetric complications)
+
+Integrating the 3Ms (Medicare + Medicaid/CHIP + Marketplace):
+- Seamless transitions as beneficiaries move between programs (ACA→Medicaid, Medicaid→Medicare)
+- Dual eligible beneficiaries (D-SNPs): integrated care models expanding
+- Continuity of care protections: must maintain access to current providers during plan transitions
+
+Transparency in Coverage (TC-PUF):
+- PY2026 public use file contains issuer and plan-level data on claims, appeals, and active URL data from PY2024
+- Machine-readable files (MRFs) required for in-network rates and allowed amounts
+
+PMC CLOUD TRANSITION (Technical Note for API Users):
+- PMC FTP Service → PMC Cloud Service on AWS by August 2026
+- Dual availability transition period: February 2026 – August 2026
+- After August 2026: FTP service discontinued; all full-text article access via AWS Cloud Service""",
+        "indication_text": "CMS strategic framework Medicare Medicaid CHIP Marketplace equity access innovation program integrity RADV STAR ratings behavioral health drug affordability maternity dual eligible D-SNP",
+        "coding_text": "Strategic guidance — no specific CPT/ICD codes. References STAR ratings, HEDIS, CAHPS, MHPAEA, V28 HCC, RADV, MIPS",
+        "cpt_codes": json.dumps(["99492","99493","99494"]),
+        "icd10_codes": json.dumps(["Z34.00","F32.9","F20.9"]),
+        "specialties": json.dumps(["managed_care","compliance","population_health","policy"]),
+        "confidence_score": 0.93, "effective_date": "2026-01-01",
+    },
+    # ── V28 Encounter Eligibility Intelligence ──────────────────────────────────
+    {
+        "source_id": "CMS-V28-ENCOUNTER-ELIGIBILITY-2026", "source_type": "encounter_policy",
+        "title": "CY2026 V28 Risk Adjustment Encounter Eligibility — Qualifying CPT Codes, Telehealth Rules, RAPS Deprecation",
+        "document_type": "encounter_policy", "payer_code": "CMS",
+        "content_text": """CY2026 Medicare Advantage V28 Encounter Eligibility — Complete Reference
+
+CRITICAL RULE: AUDIO-ONLY TELEHEALTH IS EXCLUDED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Audio-only telephone calls (phone visits without video) DO NOT qualify as encounters for V28 HCC risk adjustment under CY2026 CMS rules. This means:
+1. A provider cannot use an audio-only phone call to support a V28 HCC diagnosis for risk adjustment
+2. Even if the diagnosis is medically valid and documented, audio-only encounters are ineligible
+3. Telehealth MUST use synchronous video technology (audio + video simultaneously)
+4. Qualifying telehealth = same CPT codes as in-person + Place of Service 02 (telehealth off-site) or 10 (telehealth in patient's home), or modifier 95
+5. Plans should audit encounter data to remove audio-only submissions before annual reconciliation
+
+RAPS DEPRECATION — NON-PACE PLANS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Effective 1/1/2024: CMS no longer accepts Risk Adjustment Processing System (RAPS) submissions for new diagnoses from non-PACE MA plans
+- CY2026: 100% encounter data (EDR — Encounter Data Repository) required for non-PACE MA plans
+- Diagnoses submitted ONLY via RAPS (not EDR) after 1/1/2024 will NOT be counted in risk adjustment payment
+- PACE plans: RAPS still accepted for the V22 (90%) portion. EDR required for V28 (10%) portion.
+
+QUALIFYING ENCOUNTER TYPES AND CPT CODES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Physician Office E&M (most common):
+- 99202: New patient, straightforward/low complexity
+- 99203: New patient, low complexity
+- 99204: New patient, moderate complexity
+- 99205: New patient, high complexity
+- 99211: Established, minimal (CAUTION: nurse-only visits without physician often excluded)
+- 99212: Established, straightforward
+- 99213: Established, low complexity
+- 99214: Established, moderate complexity
+- 99215: Established, high complexity
+
+Inpatient Hospital:
+- 99221-99223: Initial hospital care (3 levels)
+- 99231-99233: Subsequent hospital care
+- 99238-99239: Hospital discharge day management
+
+Outpatient/ED:
+- 99281-99285: Emergency department E&M
+- 99241-99245: Office consultations
+
+Preventive/Wellness:
+- G0402: Welcome to Medicare (IPPE)
+- G0438: Initial Annual Wellness Visit (AWV)
+- G0439: Subsequent Annual Wellness Visit (AWV)
+- 99381-99397: Preventive medicine services (age-based)
+
+FQHC/RHC:
+- T1015: Comprehensive outpatient rehabilitation facility visit
+- G0466: FQHC visit, new patient
+- G0467: FQHC visit, established patient
+
+Telehealth (VIDEO-ENABLED ONLY):
+- Same CPT codes as in-person + Place of Service 02 or 10, OR modifier 95
+- Examples: 99214-95 (video office visit), G0439-02 (video AWV)
+- EXCLUDED: 99441-99443 (telephone E&M codes — audio only), 98966-98968 (telephone assessment)
+
+Behavioral Health:
+- 90837: Psychotherapy, 60 minutes
+- 90834: Psychotherapy, 45 minutes
+- 90832: Psychotherapy, 30 minutes
+- 90847: Family psychotherapy with patient present
+- 90853: Group psychotherapy
+- 90791: Psychiatric diagnostic evaluation
+- 99492-99494: Collaborative care management
+- H0001: Alcohol/drug assessment
+
+EXPRESSLY EXCLUDED (diagnoses from these encounters DO NOT count for V28 risk adjustment):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Audio-only telehealth: 99441 (5-10 min), 99442 (11-20 min), 99443 (21-30 min)
+2. Laboratory services alone: 80000-89999 series (no accompanying E&M)
+3. Diagnostic radiology/imaging alone: 70000-79999 series (no accompanying E&M)
+4. Pathology alone: 88000-88399 series
+5. Home health agency visits (G0151-G0168, 99500-99600) without face-to-face physician E&M
+6. Skilled nursing facility visits without qualifying physician/NPP E&M
+7. 99211 visits documented as nursing-only without physician involvement
+
+DOCUMENTATION REQUIREMENTS FOR QUALIFYING ENCOUNTERS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Each diagnosis submitted for risk adjustment must appear in the medical record
+- MEAT criteria: Monitor / Evaluate / Assess / Treat — at least one element required per diagnosis
+- Date of service must fall within the payment year (Jan 1 – Dec 31)
+- Provider must be eligible: physician (MD/DO), NP, PA, CNS, CRNA — with appropriate credentials
+- Face-to-face or video-enabled encounter required (audio-only excluded as above)
+
+TELEHEALTH PERMANENCE IN MA (POST-COVID):
+- Video telehealth E&M permanently covered in MA post-public health emergency
+- No geographic restrictions for MA members (unlike traditional Medicare)
+- Plans must cover telehealth services; members can use from home
+- STAR ratings: telehealth access counts toward access-to-care measures""",
+        "indication_text": "encounter eligibility telehealth audio-only RAPS EDR encounter data risk adjustment qualifying CPT codes face-to-face video V28 HCC",
+        "coding_text": "Qualifying: 99202-99215, 99221-99223, G0438, G0439, G0402, T1015; Telehealth: +modifier 95 or POS 02/10; Excluded: 99441-99443 (audio-only), labs 80000-89999, radiology 70000-79999",
+        "cpt_codes": json.dumps([
+            "99202","99203","99204","99205","99212","99213","99214","99215",
+            "99221","99222","99223","99231","99232","99233","99238","99239",
+            "G0402","G0438","G0439","G0466","G0467",
+            "99441","99442","99443",
+            "90837","90834","90832","90847","90791",
+            "99492","99493","99494"
+        ]),
+        "icd10_codes": json.dumps([]),
+        "specialties": json.dumps(["managed_care","compliance","risk_adjustment","telehealth","coding"]),
+        "confidence_score": 0.98, "effective_date": "2026-01-01",
+    },
+    # ── RADV Audit Intelligence Document ────────────────────────────────────────
+    {
+        "source_id": "CMS-RADV-ANNUAL-2026", "source_type": "audit_guidance",
+        "title": "CMS RADV Annual Audit Program — PY2020+ Requirements, MEAT Documentation, High-Risk HCCs (2026)",
+        "document_type": "audit_guidance", "payer_code": "CMS",
+        "content_text": """CMS Risk Adjustment Data Validation (RADV) — Annual Program CY2026
+
+PROGRAM OVERVIEW:
+CMS conducts annual RADV audits for ALL Medicare Advantage organizations (MAOs) for payment years 2020 and later. This replaced the previous sample-based program with a comprehensive annual audit.
+
+WHAT TRIGGERS A RADV FINDING:
+1. HCC coded without qualifying encounter in the payment year
+2. Diagnosis not supported by MEAT documentation in provider notes
+3. Audio-only telehealth used as the qualifying encounter
+4. Hierarchy violation: child HCC coded when parent HCC is present
+5. Diagnosis submitted via RAPS only (not EDR) for non-PACE plan
+6. Provider not eligible (e.g., lab technician, administrative staff)
+7. Date of service outside the payment year
+
+HIGHEST RADV RISK HCC CATEGORIES (V28 CY2026):
+- HCC 1 (HIV/AIDS): B20 — Requires infectious disease documentation
+- HCC 9/10 (Cancer): Oncology notes with stage, treatment plan, active/historical status
+- HCC 35/36 (Diabetes with complications): Must specify complication type (renal, neuro, ophtho)
+- HCC 52 (Dementia): Cognitive assessment, functional status, specialist note
+- HCC 85/86/87/88 (Heart failure): Echo results, EF%, specific type (systolic/diastolic)
+- HCC 96 (Atrial fibrillation): EKG or monitor report documenting arrhythmia
+- HCC 100 (Stroke/TIA): Imaging report (CT/MRI), neurologist note
+- HCC 111 (COPD): Spirometry (FEV1/FVC <0.70), pulmonologist note
+- HCC 134/135/136/137 (CKD): Labs showing GFR stage, nephrology documentation
+
+MEAT DOCUMENTATION CHECKLIST:
+For each HCC to survive RADV audit, medical record must contain:
+M — Monitor: tracking symptoms, disease progression, vital signs, lab trends
+E — Evaluate: assessing test results, reviewing imaging, diagnostic workup
+A — Assess: provider's clinical assessment of the condition, differential diagnosis
+T — Treat: active treatment plan, medications, referrals, procedures
+
+COMMON RADV DENIALS AND HOW TO PREVENT THEM:
+1. "Diagnosis not supported" → Add MEAT language to notes; avoid sign/symptom-only documentation
+2. "No qualifying encounter" → Confirm CPT code eligibility; avoid audio-only telehealth
+3. "Hierarchy violation" → Run V28 hierarchy check before submission; suppress child codes
+4. "Provider not eligible" → Verify rendering provider credentials; use physician oversight documentation
+5. "Date of service issue" → Reconcile encounter dates; ensure yearly recapture per payment year
+
+EXTRAPOLATION METHODOLOGY (PY2020+):
+CMS uses statistical extrapolation to calculate overpayments from RADV audit samples. Plans must maintain a robust documentation improvement program to minimize extrapolated financial risk.
+
+PROACTIVE COMPLIANCE STRATEGIES:
+1. Pre-submission V28 hierarchy audit (use /portal/v28/batch)
+2. Annual HCC reconciliation with provider education
+3. MEAT documentation training for coders and providers
+4. Encounter data validation before EDR submission
+5. Chase program for high-RAF members missing annual encounter""",
+        "indication_text": "RADV audit risk adjustment data validation MEAT documentation HCC hierarchy annual audit PY2020 compliance overpayment extrapolation",
+        "coding_text": "RADV audit: HCC 1 B20, HCC 35/36 E10/E11 complications, HCC 52 G30, HCC 85-88 I50.x, HCC 96 I48.x, HCC 100 I63.x, HCC 111 J44.x",
+        "cpt_codes": json.dumps([]),
+        "icd10_codes": json.dumps(["B20","E10.9","E11.9","G30.9","I50.9","I48.0","I63.9","J44.9"]),
+        "specialties": json.dumps(["managed_care","compliance","risk_adjustment","coding"]),
+        "confidence_score": 0.97, "effective_date": "2026-01-01",
+    },
 ]
 
 # V28 HCC seed data — real codes, real statuses
@@ -683,6 +1254,105 @@ def build():
                 """, (note, rationale, row[0]))
     except ImportError:
         pass  # Expanded module optional
+
+    # Seed V28 HCC category reference table
+    try:
+        from v28_hcc_categories import V28_HCC_CATEGORIES
+        for hcc_num, cat in V28_HCC_CATEGORIES.items():
+            conn.execute("""
+                INSERT OR IGNORE INTO v28_hcc_categories
+                (hcc_number, description, disease_family, severity, raf_weight, hierarchy_group)
+                VALUES (?,?,?,?,?,?)
+            """, (
+                hcc_num,
+                cat.get("desc", ""),
+                cat.get("family", ""),
+                cat.get("severity", "standard"),
+                cat.get("raf_weight", 0.0),
+                cat.get("hierarchy_group"),
+            ))
+    except ImportError:
+        pass  # Optional — populated by cms_zip_ingest.py
+
+    # Seed 2026 CMS model configuration (normalization factors, MA coding adjustment)
+    CMS_2026_CONFIG = [
+        # Normalization factors — applied to RAF before payment calculation
+        (2026, "norm_factor_cms_hcc_v28_part_c",    "1.067",  "2024 CMS-HCC V28 Part C normalization factor", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_cms_hcc_v22_part_c",    "1.187",  "2017 CMS-HCC V22 Part C normalization factor (PACE blend)", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_dialysis_v24",      "1.062",  "2023 ESRD V24 dialysis normalization factor", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_dialysis_v21",      "1.129",  "2019 ESRD V21 dialysis normalization factor (PACE)", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_graft_v24",         "1.104",  "2023 ESRD V24 graft normalization factor", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_esrd_graft_v21",         "1.203",  "2019 ESRD V21 graft normalization factor (PACE)", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_rxhcc_ma_pd",            "1.194",  "RxHCC MA-PD 2022/2023 calibration normalization", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_rxhcc_pdp",              "0.887",  "RxHCC PDP 2022/2023 calibration normalization", "2026 CMS Final Rate Announcement"),
+        (2026, "norm_factor_rxhcc_pace",             "1.202",  "RxHCC PACE 2018/2019 calibration normalization", "2026 CMS Final Rate Announcement"),
+        # MA coding intensity adjustment
+        (2026, "ma_coding_intensity_adjustment",     "0.059",  "5.90% statutory minimum coding intensity adjustment applied to all MA plans", "2026 CMS Final Rate Announcement"),
+        # PACE blending
+        (2026, "pace_v28_blend_pct",                 "0.10",   "PACE plans: 10% V28 (2024 CMS-HCC) weight in 2026", "2026 CMS Final Rate Announcement"),
+        (2026, "pace_v22_blend_pct",                 "0.90",   "PACE plans: 90% V22 (2017 CMS-HCC) weight in 2026", "2026 CMS Final Rate Announcement"),
+        # Non-PACE MA
+        (2026, "non_pace_v28_blend_pct",             "1.00",   "Non-PACE MA: 100% V28 (full phase-in complete)", "2026 CMS Final Rate Announcement"),
+        # Revenue impact
+        (2026, "avg_risk_score_change_v28_vs_blend", "-0.0301", "-3.01% average risk score change vs 2025 V24/V28 blend", "2026 CMS Final Rate Announcement"),
+        (2026, "ma_payment_increase_pct",            "0.0506",  "5.06% average MA payment increase for 2026", "2026 CMS Final Rate Announcement"),
+        (2026, "effective_growth_rate",              "0.0904",  "9.04% effective growth rate (includes Q4 2024 FFS data)", "2026 CMS Final Rate Announcement"),
+        # Data sources
+        (2026, "data_source_non_pace",              "encounter_data_ffs_only", "Non-PACE: encounter data + FFS claims only; RAPS no longer accepted for new data", "2026 Implementation Memo"),
+        (2026, "data_source_pace",                  "raps_encounter_ffs_blend", "PACE: RAPS + encounter + FFS blended", "2026 Implementation Memo"),
+        # V28 model stats
+        (2026, "v28_payment_hccs",                  "115",    "Number of payment HCC categories in V28 (vs 86 in V24)", "CMS V28 Model Documentation"),
+        (2026, "v28_icd10_mapped_codes",             "7770",   "Approximate number of ICD-10-CM codes mapping to V28 payment HCCs (vs 9,797 in V24)", "CMS V28 Model Documentation"),
+        (2026, "v28_icd10_removed_codes",            "2290",   "ICD-10-CM codes removed from HCC mapping in V28 vs V24 transition", "CMS V28 Model Documentation"),
+        # MOR/MMR record types — Non-PACE MA (2026)
+        (2026, "mor_record_type_non_pace_part_c",    "2024 CMS-HCC V28 M",  "Non-PACE Part C MOR/MMR record type identifier for 2026 payment year", "CMS MOR/MMR 2026 Spec"),
+        (2026, "mor_record_type_non_pace_rxhcc",     "2026 RxHCC V08 6",    "Non-PACE Part D RxHCC MOR/MMR record type for 2026", "CMS MOR/MMR 2026 Spec"),
+        (2026, "mor_record_type_non_pace_esrd",      "2023 ESRD V24 L",     "Non-PACE ESRD MOR/MMR record type for 2026", "CMS MOR/MMR 2026 Spec"),
+        # MOR/MMR record types — PACE (2026, blended V28+V22)
+        (2026, "mor_record_type_pace_part_c",        "2024 CMS-HCC V28 M",  "PACE Part C MOR/MMR record type — V28 portion (10% weight)", "CMS MOR/MMR 2026 Spec / PCUG Nov 2025"),
+        (2026, "mor_record_type_pace_rxhcc",         "2026 RxHCC V08 6/7",  "PACE Part D RxHCC MOR/MMR record type — V08 records 6 and 7", "CMS MOR/MMR 2026 Spec / PCUG Nov 2025"),
+        (2026, "mor_record_type_pace_v22",           "2017 CMS-HCC V22 K",  "PACE V22 legacy MOR/MMR record type — 90% weight in 2026 blend", "CMS MOR/MMR 2026 Spec / PCUG Nov 2025"),
+        (2026, "mor_record_type_pace_esrd_v24",      "2023 ESRD V24 L",     "PACE ESRD V24 MOR/MMR record type", "CMS MOR/MMR 2026 Spec"),
+        (2026, "mor_record_type_pace_esrd_v21",      "2019 ESRD V21 B",     "PACE ESRD V21 legacy MOR/MMR record type", "CMS MOR/MMR 2026 Spec"),
+        # Frailty supplemental payment — FIDE-SNPs
+        (2026, "norm_factor_frailty_fide_snps",      "full_2024_factors",   "Frailty supplemental payment uses full 2024 CMS frailty factors for FIDE-SNPs in 2026 — no phase-in reduction", "2026 CMS Final Rate Announcement"),
+        # Encounter data filtering rules — what qualifies for risk adjustment
+        (2026, "encounter_filter_face_to_face_required",   "true",  "Diagnoses must come from face-to-face visits with eligible CPT/HCPCS codes to qualify for risk adjustment", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_excluded_audio_only_telehealth",  "true",  "Audio-only telehealth visits do NOT qualify as face-to-face encounters for risk adjustment (video-enabled telehealth does qualify)", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_excluded_labs_radiology_alone",   "true",  "Laboratory, radiology, and pathology results alone (without face-to-face CPT/HCPCS) do not qualify diagnoses for risk adjustment", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_excluded_home_health_snf_no_f2f", "true",  "Home health agency and SNF claims without an accompanying face-to-face CPT/HCPCS encounter code do not qualify for risk adjustment", "2026 CMS Encounter Data Guidance"),
+        (2026, "encounter_accepted_sources",         "physician_inpatient_outpatient_facility", "Qualifying face-to-face sources: physician office (E&M), inpatient hospital, outpatient hospital, FQHC/RHC — with eligible CPT/HCPCS", "2026 CMS Encounter Data Guidance"),
+        # Medical education cost adjustment
+        (2026, "medical_education_cost_adjustment",   "1.00",   "100% technical adjustment applied in 2026 — 3-year phase-in to remove medical education costs from growth rate calculation is complete", "2026 CMS Final Rate Announcement"),
+        # CMS scale
+        (2026, "cms_beneficiary_count",              "150000000", "CMS covers 150 million Americans across Medicare, Medicaid/CHIP, and Marketplace", "CMS Strategic Plan 2026"),
+        # MIPS HIPAA Security attestation
+        (2026, "mips_hipaa_security_attestation_required", "true", "CMS-1832-F: MIPS eligible clinicians must attest to HIPAA Security Rule compliance — formal risk analysis + risk management plan required", "CY2026 Physician Fee Schedule CMS-1832-F"),
+        (2026, "mips_max_negative_adjustment",       "-0.09",  "Maximum MIPS negative payment adjustment for low performers in CY2026: −9%", "CY2026 PFS CMS-1832-F"),
+        # Part D redesign
+        (2026, "part_d_oop_cap_dollars",             "2000",   "Medicare Part D annual out-of-pocket cap: $2,000 (IRA; effective 2025, continuing 2026)", "Inflation Reduction Act / 2026 Part D Program Instructions"),
+        (2026, "part_d_m3p_available",               "true",   "Medicare Prescription Payment Plan (M3P): beneficiaries can spread Part D OOP costs in monthly installments", "2026 Part D Program Instructions"),
+        (2026, "part_d_rxhcc_non_pace_record",       "2026 RxHCC V08 6",  "Non-PACE MA-PD RxHCC MOR/MMR record type for 2026", "2026 Part D Redesign Program Instructions"),
+        (2026, "part_d_rxhcc_pace_records",          "2026 RxHCC V08 6/7", "PACE RxHCC MOR/MMR record types (records 6 and 7) for 2026", "2026 Part D Redesign Program Instructions"),
+        # CPT surgery coding guidelines
+        (2026, "cabg_combined_series_start_cpt",     "33517",  "CABG combined arterial-venous series starts at 33517 — must use this series when both arterial and venous conduits are used", "AMA CPT 2026"),
+        (2026, "cabg_radial_artery_harvest_cpt",     "35600",  "Upper extremity artery harvest (e.g., radial) for CABG: separately reportable as CPT 35600", "AMA CPT 2026"),
+        (2026, "cabg_saphenous_harvest_bundled",     "true",   "Lower extremity (saphenous) vein harvest for CABG: BUNDLED — do not bill separately", "AMA CPT 2026 / NCCI Edits"),
+        (2026, "pacemaker_upgrade_dual_cpt",         "33214",  "Upgrade single-chamber to dual-chamber pacemaker: CPT 33214 — includes removal, lead test, new lead + generator; do not unbundle", "AMA CPT 2026"),
+        (2026, "colonoscopy_requires_cecum",         "true",   "Colonoscopy CPT codes (45378+) require documentation that scope reached the cecum; failure = recode as sigmoidoscopy (45330)", "AMA CPT 2026 / CMS Correct Coding"),
+        (2026, "small_intestine_addon_cpt",          "44121",  "Multiple small intestine resections: 44120 once + 44121 (add-on) for each additional — never multiple units of 44120", "AMA CPT 2026"),
+        (2026, "enterolysis_adhesions_cpt",          "44005",  "Extensive intestinal adhesion lysis: CPT 44005. Add Modifier 22 for unusually time-consuming cases with documented complexity", "AMA CPT 2026"),
+        # V28 audit and hierarchy
+        (2026, "v28_hierarchy_enforcement",          "automated", "V28 CMS payment engine automatically suppresses child HCCs when parent is present — code stacking is a RADV audit trigger", "CMS V28 Model Documentation"),
+        (2026, "meat_evidence_required",             "true",   "Each coded HCC requires MEAT (Monitor/Evaluate/Assess/Treat) evidence in the provider note for the payment year", "CMS RADV Program Guidance PY2020+"),
+        (2026, "radv_audit_scope",                   "annual_all_plans", "RADV audits: annual for ALL MA plans starting PY2020; invalid HCC triggers repayment of full HCC payment × enrollment count", "CMS RADV Guidance PY2020+"),
+    ]
+    for config_year, config_key, config_value, description, source in CMS_2026_CONFIG:
+        conn.execute("""
+            INSERT OR IGNORE INTO cms_model_config
+            (config_year, config_key, config_value, description, source)
+            VALUES (?,?,?,?,?)
+        """, (config_year, config_key, config_value, description, source))
 
     # Seed a demo API key
     import secrets as s
