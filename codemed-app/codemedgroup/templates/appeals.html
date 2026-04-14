@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Appeal Generator — CodeMed Group</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080D;--surface:#0C0F17;--surface2:#111520;--border:#1E2435;--blue:#2563EB;--blue-glow:#3B82F6;--cyan:#06B6D4;--green:#10B981;--red:#EF4444;--yellow:#F59E0B;--text:#E2E8F0;--muted:#64748B;--subtle:#94A3B8;--font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;display:flex}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.3;pointer-events:none}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);flex-shrink:0;z-index:10;position:fixed;top:0;bottom:0;display:flex;flex-direction:column}
+.logo{padding:24px 20px;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.logo-text{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.logo-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+.nav{padding:16px 12px;flex:1}
+.nav-section{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:0 8px;margin:16px 0 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer;text-decoration:none;color:var(--subtle);font-size:13.5px;font-weight:500;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(16,185,129,.1);color:var(--green);border-left:2px solid var(--green)}
+.nav-icon{width:16px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--blue);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+.status-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;box-shadow:0 0 6px var(--green)}
+.status-text{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.main{margin-left:220px;flex:1;z-index:1}
+.topbar{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(6,8,13,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:5}
+.page-title{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.page-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.content{padding:32px;display:grid;grid-template-columns:400px 1fr;gap:24px;max-width:1200px}
+@media(max-width:900px){.content{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.card-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600}
+.card-body{padding:22px}
+label{display:block;font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:16px}
+label:first-child{margin-top:0}
+input,textarea,select{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13.5px;border-radius:7px;padding:10px 14px;width:100%;outline:none;transition:border-color .15s}
+input:focus,textarea:focus,select:focus{border-color:var(--green)}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+select option{background:var(--surface2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 22px;border-radius:7px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;border:none;width:100%;margin-top:20px}
+.btn-green{background:var(--green);color:#000}
+.btn-green:hover{box-shadow:0 0 24px rgba(16,185,129,.4);opacity:.95}
+.btn-ghost{background:transparent;color:var(--subtle);border:1px solid var(--border);margin-top:8px}
+.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+/* Letter output */
+.letter-box{background:#000;border:1px solid var(--border);border-radius:8px;padding:24px;font-family:var(--mono);font-size:13px;line-height:1.75;color:#CBD5E1;white-space:pre-wrap;min-height:400px;position:relative}
+.letter-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;color:var(--muted);text-align:center;gap:12px}
+.letter-placeholder-icon{font-size:32px;opacity:.4}
+.letter-placeholder-text{font-size:13px}
+.spinner{width:20px;height:20px;border:2px solid rgba(16,185,129,.3);border-top-color:var(--green);border-radius:50%;animation:spin .6s linear infinite;margin:auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sources-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.source-tag{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:var(--green);font-size:11px;padding:3px 8px;border-radius:5px;font-family:var(--mono)}
+.copy-btn{position:absolute;top:12px;right:12px;background:var(--surface);border:1px solid var(--border);color:var(--subtle);padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;font-family:var(--mono);transition:all .15s}
+.copy-btn:hover{border-color:var(--green);color:var(--green)}
+/* Quick fill */
+.quick-fill{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.qf{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;font-family:var(--mono);color:var(--cyan);cursor:pointer;transition:all .12s}
+.qf:hover{border-color:var(--cyan);background:rgba(6,182,212,.1)}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">CMG</div>
+      <div><div class="logo-text">CodeMed Group</div><div class="logo-sub">v1.0 · HIPAA Compliant</div></div>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">Platform</div>
+    <a href="/" class="nav-item"><span class="nav-icon">⬡</span>Dashboard</a>
+    <a href="/chat" class="nav-item"><span class="nav-icon">◈</span>CodeMed AI Chat</a>
+    <a href="/v28" class="nav-item"><span class="nav-icon">◉</span>V28 HCC Checker</a>
+    <a href="/appeals" class="nav-item active"><span class="nav-icon">◎</span>Appeal Generator</a>
+    <div class="nav-section">Developer</div>
+    <a href="/docs" class="nav-item"><span class="nav-icon">◫</span>API Docs &amp; Keys<span class="nav-badge">API</span></a>
+  </div>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span><span class="status-text">30 min → 30 seconds</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title">◎ Appeal Generator</div>
+      <div class="page-sub">LCD/NCD-cited appeal letters · 30 seconds · Claude-powered</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- Form -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Claim Details</div>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">No PHI stored</span>
+      </div>
+      <div class="card-body">
+        <label>CPT / Procedure Code</label>
+        <input type="text" id="cpt" placeholder="e.g. 93228" style="font-family:var(--mono)">
+        <div class="quick-fill">
+          <span class="qf" onclick="setField('cpt','93228')">93228 Holter</span>
+          <span class="qf" onclick="setField('cpt','72148')">72148 MRI Lumbar</span>
+          <span class="qf" onclick="setField('cpt','95810')">95810 PSG</span>
+          <span class="qf" onclick="setField('cpt','45378')">45378 Colonoscopy</span>
+        </div>
+
+        <label>ICD-10 Diagnosis Codes</label>
+        <input type="text" id="icd10" placeholder="e.g. I48.0, R00.1, R55" style="font-family:var(--mono)">
+        <div class="quick-fill">
+          <span class="qf" onclick="setField('icd10','I48.0, R00.1')">Afib</span>
+          <span class="qf" onclick="setField('icd10','M54.50, M51.16')">Back Pain</span>
+          <span class="qf" onclick="setField('icd10','G47.33')">Sleep Apnea</span>
+          <span class="qf" onclick="setField('icd10','K92.1')">GI Bleed</span>
+        </div>
+
+        <label>Denial Reason</label>
+        <select id="denial">
+          <option value="Medical Necessity">Medical Necessity</option>
+          <option value="Not Covered">Not Covered / Excluded Service</option>
+          <option value="Frequency Limitation">Frequency Limitation</option>
+          <option value="Experimental / Investigational">Experimental / Investigational</option>
+          <option value="Lack of Prior Authorization">Lack of Prior Authorization</option>
+          <option value="Duplicate Claim">Duplicate Claim</option>
+          <option value="Coding Error">Coding Error / Incorrect Code</option>
+        </select>
+
+        <label>Denial Date (optional)</label>
+        <input type="date" id="denial-date">
+
+        <label>Payer Name</label>
+        <input type="text" id="payer" placeholder="e.g. UnitedHealthcare, Aetna, CMS Medicare">
+        <div class="quick-fill">
+          <span class="qf" onclick="setField('payer','UnitedHealthcare')">UHC</span>
+          <span class="qf" onclick="setField('payer','Aetna')">Aetna</span>
+          <span class="qf" onclick="setField('payer','Blue Cross Blue Shield')">BCBS</span>
+          <span class="qf" onclick="setField('payer','Medicare')">Medicare</span>
+        </div>
+
+        <label>Provider / Practice Name</label>
+        <input type="text" id="provider" placeholder="e.g. Riverside Cardiology Associates">
+
+        <button class="btn btn-green" onclick="generateAppeal()">◎ Generate Appeal Letter</button>
+        <button class="btn btn-ghost" onclick="loadExample()">Load Example Claim</button>
+      </div>
+    </div>
+
+    <!-- Output -->
+    <div class="card" style="align-self:start">
+      <div class="card-header">
+        <div class="card-title">Generated Appeal Letter</div>
+        <div id="sources-row" style="display:none"></div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="letter-wrap">
+          <div class="letter-placeholder">
+            <div class="letter-placeholder-icon">◎</div>
+            <div class="letter-placeholder-text">Fill in the claim details and click<br>Generate Appeal Letter</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function setField(id, val) {
+  document.getElementById(id).value = val;
+}
+
+function loadExample() {
+  setField('cpt', '93228');
+  setField('icd10', 'I48.0, R00.1, R55');
+  document.getElementById('denial').value = 'Medical Necessity';
+  document.getElementById('denial-date').value = new Date().toISOString().split('T')[0];
+  setField('payer', 'UnitedHealthcare');
+  setField('provider', 'Riverside Cardiology Associates');
+}
+
+async function generateAppeal() {
+  const cpt     = document.getElementById('cpt').value.trim();
+  const icd10   = document.getElementById('icd10').value.trim();
+  const denial  = document.getElementById('denial').value;
+  const date    = document.getElementById('denial-date').value;
+  const payer   = document.getElementById('payer').value.trim();
+  const provider= document.getElementById('provider').value.trim();
+
+  if (!cpt || !icd10 || !payer || !provider) {
+    alert('Please fill in CPT code, ICD-10 codes, payer, and provider name.');
+    return;
+  }
+
+  const codes = icd10.split(/[\s,]+/).filter(Boolean);
+  const wrap = document.getElementById('letter-wrap');
+  const srcRow = document.getElementById('sources-row');
+  wrap.innerHTML = '<div style="display:flex;justify-content:center;padding:60px"><div class="spinner"></div></div>';
+  srcRow.style.display = 'none';
+
+  try {
+    const r = await fetch('/portal/appeals/generate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({cpt_code:cpt, icd10_codes:codes, denial_reason:denial,
+                            denial_date:date, payer, provider_name:provider})
+    });
+    const d = await r.json();
+    if (d.letter) {
+      wrap.innerHTML = `<div class="letter-box">
+        <button class="copy-btn" onclick="copyLetter()">Copy</button>
+        <span id="letter-text">${d.letter.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+      </div>`;
+      if (d.sources && d.sources.length) {
+        srcRow.style.display = 'flex';
+        srcRow.innerHTML = d.sources.map(s =>
+          `<span class="source-tag">[${s.id}]</span>`
+        ).join('');
+      }
+    } else {
+      wrap.innerHTML = `<div style="color:var(--red);padding:20px">${d.error || 'Unknown error'}</div>`;
+    }
+  } catch(e) {
+    wrap.innerHTML = `<div style="color:var(--red);padding:20px">Error: ${e.message}</div>`;
+  }
+}
+
+function copyLetter() {
+  const text = document.getElementById('letter-text');
+  if (text) {
+    navigator.clipboard.writeText(text.innerText).then(() => {
+      document.querySelector('.copy-btn').textContent = 'Copied!';
+      setTimeout(() => document.querySelector('.copy-btn').textContent = 'Copy', 2000);
+    });
+  }
+}
+</script>
+</body>
+</html>

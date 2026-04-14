@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+data/nexusauth.db
+*.db
+.DS_Store
+venv/
+.venv/
+dist/
+*.egg-info/
