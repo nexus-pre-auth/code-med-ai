@@ -122,6 +122,20 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .footer-bottom .disclaimer{font-size:10.5px;color:var(--muted);font-family:var(--mono);opacity:.6}
 
 /* RESPONSIVE */
+/* DATA INTELLIGENCE GRID */
+.data-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.data-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+.data-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;text-align:center;transition:all .2s}
+.data-card:hover{border-color:rgba(37,99,235,.4);transform:translateY(-2px);box-shadow:0 8px 32px rgba(37,99,235,.12)}
+.data-card-sm{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;transition:all .2s}
+.data-card-sm:hover{border-color:rgba(37,99,235,.4);transform:translateY(-2px);box-shadow:0 8px 32px rgba(37,99,235,.12)}
+.data-num{font-size:32px;font-weight:700;font-family:var(--mono);letter-spacing:-1px;margin-bottom:6px}
+.data-num-sm{font-size:24px;font-weight:700;font-family:var(--mono);letter-spacing:-1px;margin-bottom:4px}
+.data-title{font-size:13px;font-weight:600;margin-bottom:8px}
+.data-title-sm{font-size:12px;font-weight:600;margin-bottom:4px}
+.data-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
+.data-desc-sm{font-size:11px;color:var(--muted);line-height:1.4}
+
 @media(max-width:768px){
   .nav-links{display:none}
   .features-grid{grid-template-columns:1fr}
@@ -130,10 +144,13 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   .demo-pane:first-child{border-right:none;border-bottom:1px solid var(--border)}
   .footer-top{grid-template-columns:1fr 1fr}
   .proof-sep{display:none}
+  .data-grid-4{grid-template-columns:1fr 1fr}
+  .data-grid-3{grid-template-columns:1fr}
 }
 @media(max-width:480px){
   .pricing-grid{grid-template-columns:1fr}
   .footer-top{grid-template-columns:1fr}
+  .data-grid-4{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -170,7 +187,8 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   </h1>
   <p class="hero-sub">
     Real-time V28 HCC coding, prior authorization guidance, RAF simulation,
-    and RADV audit prep — trained on 1,307+ CMS policies and built for
+    and RADV audit prep — trained on 8,000+ ICD-10 codes, 38 CMS policies,
+    115 V28 HCC categories, and 81 compliance rules — built for
     Medicare Advantage teams.
   </p>
   <div class="hero-ctas">
@@ -179,28 +197,76 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
   </div>
   <div class="hero-proof">
     <div class="proof-item">
-      <span class="proof-num">1,307+</span>
-      <span class="proof-label">CMS Policies</span>
-    </div>
-    <div class="proof-sep"></div>
-    <div class="proof-item">
-      <span class="proof-num">7,770</span>
+      <span class="proof-num">8,051</span>
       <span class="proof-label">ICD-10 Codes</span>
     </div>
     <div class="proof-sep"></div>
     <div class="proof-item">
       <span class="proof-num">115</span>
-      <span class="proof-label">HCC Categories</span>
+      <span class="proof-label">V28 HCC Categories</span>
     </div>
     <div class="proof-sep"></div>
     <div class="proof-item">
-      <span class="proof-num">&lt;30s</span>
-      <span class="proof-label">Appeal Letters</span>
+      <span class="proof-num">38</span>
+      <span class="proof-label">CMS Policies</span>
+    </div>
+    <div class="proof-sep"></div>
+    <div class="proof-item">
+      <span class="proof-num">81</span>
+      <span class="proof-label">Compliance Rules</span>
     </div>
     <div class="proof-sep"></div>
     <div class="proof-item">
       <span class="proof-num">CY2026</span>
       <span class="proof-label">100% V28</span>
+    </div>
+  </div>
+</section>
+
+<!-- DATA INTELLIGENCE SECTION -->
+<section class="section" style="padding-top:20px;padding-bottom:40px">
+  <div style="text-align:center;margin-bottom:40px">
+    <div class="section-badge">DATA INTELLIGENCE</div>
+    <h2 class="section-title" style="margin:0 auto">The data behind every decision</h2>
+    <p class="section-sub" style="margin:12px auto 0">CodeMed AI is grounded in real CMS data, not generic training. Every response is backed by verified policies, codes, and compliance rules updated for CY2026.</p>
+  </div>
+  <div class="data-grid-4">
+    <div class="data-card">
+      <div class="data-num" style="color:var(--cyan)">8,051</div>
+      <div class="data-title">ICD-10 Codes Mapped</div>
+      <div class="data-desc">281 hand-curated high-revenue codes with clinical rationales, plus 7,770 from official CMS V28 ZIP releases</div>
+    </div>
+    <div class="data-card">
+      <div class="data-num" style="color:var(--blue-glow)">115</div>
+      <div class="data-title">V28 Payment HCCs</div>
+      <div class="data-desc">Full CY2026 catalog with RAF weights, 43 hierarchy groups, 18 interaction pairs, and 21 disease families</div>
+    </div>
+    <div class="data-card">
+      <div class="data-num" style="color:var(--green)">38</div>
+      <div class="data-title">CMS Policies Indexed</div>
+      <div class="data-desc">LCD/NCD coverage determinations with FTS5 search — cardiac, oncology, orthopedic, sleep, pain management, and more</div>
+    </div>
+    <div class="data-card">
+      <div class="data-num" style="color:var(--purple)">81</div>
+      <div class="data-title">Compliance Rules</div>
+      <div class="data-desc">20 combo-code enforcement rules, 43 hierarchy suppressions, and 18 interaction validations to prevent RADV audit triggers</div>
+    </div>
+  </div>
+  <div class="data-grid-3">
+    <div class="data-card-sm">
+      <div class="data-num-sm" style="color:var(--yellow)">53</div>
+      <div class="data-title-sm">CMS Config Rules</div>
+      <div class="data-desc-sm">Normalization factors, PACE/non-PACE blending, MA coding intensity, MOR/MMR record types, encounter filtering</div>
+    </div>
+    <div class="data-card-sm">
+      <div class="data-num-sm" style="color:var(--red)">9</div>
+      <div class="data-title-sm">RADV Audit Families</div>
+      <div class="data-desc-sm">MEAT documentation requirements for the highest-risk HCC categories — diabetes, cardiac, renal, oncology, and more</div>
+    </div>
+    <div class="data-card-sm">
+      <div class="data-num-sm" style="color:var(--green)">21</div>
+      <div class="data-title-sm">Disease Families</div>
+      <div class="data-desc-sm">Cardiac, diabetes, renal, respiratory, cancer, neurology, behavioral health, vascular, hepatic, GI, and more</div>
     </div>
   </div>
 </section>
@@ -261,7 +327,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <a href="/chat" class="feat-card" style="text-decoration:none;color:inherit">
       <div class="feat-icon" style="background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.25)">◈</div>
       <div class="feat-name">AI Billing Chat</div>
-      <div class="feat-desc">RAG-powered assistant trained on 1,307+ LCD/NCD policies. Ask anything about prior auth, coverage criteria, encounter eligibility, or RAPS vs EDR.</div>
+      <div class="feat-desc">RAG-powered assistant trained on 38 LCD/NCD policies and 8,000+ ICD-10 codes. Ask anything about prior auth, coverage criteria, encounter eligibility, or RAPS vs EDR.</div>
       <span class="feat-badge badge-live">LIVE</span>
     </a>
     <a href="/appeals" class="feat-card" style="text-decoration:none;color:inherit">
@@ -413,7 +479,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
       </div>
     </div>
     <div class="footer-bottom">
-      <p>© 2025 CodeMed Group. All rights reserved.</p>
+      <p>© 2026 CodeMed Group. All rights reserved.</p>
       <p class="disclaimer">Not a substitute for qualified medical billing or legal advice. CMS data references are for informational purposes only.</p>
     </div>
   </div>
