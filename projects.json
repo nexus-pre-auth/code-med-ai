@@ -1,0 +1,93 @@
+{
+  "workspace": "code-med-ai",
+  "scanned_at": "2026-04-25",
+  "inference_rules": {
+    "healthcare": "Folder name or files contain medical/HCC/HIPAA/RCM/clinical indicators",
+    "deployment_rule": "healthcare projects → AWS (HIPAA-eligible infrastructure); non-healthcare → standard cloud"
+  },
+  "projects": [
+    {
+      "name": "codemedgroup",
+      "folder": "codemedgroup/",
+      "type": "healthcare",
+      "language": "Python",
+      "framework": "Flask 3.0+",
+      "current_state": "production on Railway",
+      "inference_confidence": "high",
+      "inference_signals": [
+        "app.py: CodeMed Group Platform v2.0 — HCC risk adjustment + medical billing",
+        "data/v28_hcc_categories.py: 115 V28 HCC payment categories",
+        "data/hipaa_corpus: HIPAA reference documents",
+        "requirements.txt: anthropic, flask, werkzeug"
+      ],
+      "deployment_plan": {
+        "target_cloud": "AWS",
+        "services": [
+          "AWS Elastic Beanstalk or ECS Fargate (Flask app hosting)",
+          "Amazon RDS for PostgreSQL (replace SQLite — WAL/FTS5 → pg_fts)",
+          "AWS HealthLake (FHIR-compliant clinical data store for PHI)",
+          "AWS KMS (encryption at rest for audit_log and users tables)",
+          "AWS WAF + Shield (API rate limiting, DDoS protection)",
+          "AWS Secrets Manager (SECRET_KEY, ANTHROPIC_API_KEY)",
+          "AWS CloudTrail (audit logging for HIPAA §164.312(b))"
+        ],
+        "compliance": ["HIPAA", "HITECH"],
+        "notes": "BAA with AWS required before storing any PHI. Enable VPC isolation for RDS."
+      }
+    },
+    {
+      "name": "codemed-app",
+      "folder": "codemed-app/",
+      "type": "healthcare",
+      "language": "Python",
+      "framework": "Flask 3.0+",
+      "current_state": "local prototype",
+      "inference_confidence": "high",
+      "inference_signals": [
+        "codemed-app/codemedgroup/app.py: identical Flask platform codebase",
+        "Folder name contains 'codemed' — known healthcare brand",
+        "Contains Procfile + railway.json — deployment artifacts present but not yet live"
+      ],
+      "deployment_plan": {
+        "target_cloud": "AWS",
+        "services": [
+          "AWS Elastic Beanstalk (lift-and-shift from Railway Procfile)",
+          "Amazon RDS for PostgreSQL (production-grade DB replace SQLite)",
+          "AWS HealthLake (PHI data isolation)",
+          "AWS Secrets Manager (env var migration)",
+          "AWS Certificate Manager (TLS termination)"
+        ],
+        "compliance": ["HIPAA", "HITECH"],
+        "notes": "Merge or archive — appears to be a staging copy of codemedgroup/. Confirm if this is a separate deployment target or duplicate before provisioning AWS resources."
+      }
+    },
+    {
+      "name": "nextjs",
+      "folder": "nextjs/",
+      "type": "healthcare",
+      "language": "TypeScript",
+      "framework": "Next.js 15",
+      "current_state": "staging with active development",
+      "inference_confidence": "high",
+      "inference_signals": [
+        "package.json: @anthropic-ai/sdk, @supabase/supabase-js, stripe — CodeMed AI SaaS frontend",
+        "app/chat/: clinical AI chat interface",
+        "app/documents/: CMS LCD/NCD document management",
+        "app/admin/: admin portal — consistent with regulated healthcare platform"
+      ],
+      "deployment_plan": {
+        "target_cloud": "AWS",
+        "services": [
+          "AWS Amplify or CloudFront + S3 (Next.js static + SSR hosting)",
+          "AWS Lambda@Edge (SSR for Next.js App Router pages)",
+          "Amazon Cognito (replace Supabase Auth — HIPAA-eligible identity provider)",
+          "AWS WAF (rate limiting for /api/* routes)",
+          "AWS Secrets Manager (Stripe keys, Anthropic API key)",
+          "AWS CloudWatch (frontend error monitoring)"
+        ],
+        "compliance": ["HIPAA", "PCI-DSS (Stripe integration)"],
+        "notes": "Supabase is not HIPAA-eligible without a BAA. Migrate auth to Amazon Cognito or a HIPAA-covered identity provider before handling PHI in frontend sessions."
+      }
+    }
+  ]
+}
