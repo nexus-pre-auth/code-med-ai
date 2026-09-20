@@ -66,8 +66,13 @@ def require_api_key(f):
             return jsonify({"error":"Invalid or inactive API key"}), 401
         tier = row["tier"]
         lim  = TIERS.get(tier, TIERS["demo"])
-        bucket = f"{row['id']}:{int(time.time()//60)}"
+        current_minute = int(time.time() // 60)
+        bucket = f"{row['id']}:{current_minute}"
         _rate_store[bucket] = _rate_store.get(bucket, 0) + 1
+        # Evict buckets older than 2 minutes to prevent unbounded growth
+        stale = [k for k in list(_rate_store) if k.split(":")[-1].isdigit() and int(k.split(":")[-1]) < current_minute - 1]
+        for k in stale:
+            _rate_store.pop(k, None)
         if _rate_store[bucket] > lim["rpm"]:
             return jsonify({"error":"Rate limit exceeded","rpm_limit":lim["rpm"],"upgrade":"https://codemedgroup.com/docs"}), 429
         g.api_id       = row["id"]
@@ -502,6 +507,61 @@ def v28_lookup(code: str) -> dict:
         "hcc_label": r["hcc_label"], "upgrade_suggestions": upgrades,
         "v28_change_note": r.get("v28_change_note"), "clinical_rationale": r.get("clinical_rationale"),
     }
+
+def v28_lookup_batch(codes: list) -> list:
+    """Batch version of v28_lookup — one DB round-trip for codes + one per unique REJECTED prefix."""
+    if not codes:
+        return []
+    codes_upper = [c.upper().strip() for c in codes]
+    db = get_db()
+    placeholders = ",".join("?" * len(codes_upper))
+    rows = db.execute(
+        f"SELECT * FROM v28_hcc_codes WHERE icd10_code IN ({placeholders})",
+        codes_upper
+    ).fetchall()
+    found = {dict(r)["icd10_code"]: dict(r) for r in rows}
+
+    # Collect prefixes for REJECTED codes
+    rejected_prefixes: dict[str, list] = {}
+    for code in codes_upper:
+        r = found.get(code)
+        if r and not r["v28_pays"] and r["v24_pays"]:
+            rejected_prefixes.setdefault(code[:3], []).append(code)
+
+    # One upgrade query per unique 3-char prefix
+    upgrades_by_prefix: dict[str, list] = {}
+    for prefix in rejected_prefixes:
+        urows = db.execute("""
+            SELECT icd10_code, description, v28_hcc, payment_tier, hcc_label
+            FROM v28_hcc_codes WHERE icd10_code LIKE ? AND v28_pays=1
+            ORDER BY CASE payment_tier WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END
+            LIMIT 5
+        """, (f"{prefix}%",)).fetchall()
+        upgrades_by_prefix[prefix] = [dict(x) for x in urows]
+
+    results = []
+    for code in codes_upper:
+        r = found.get(code)
+        if not r:
+            results.append({"code": code, "status": "NOT_FOUND", "v28_pays": False,
+                            "message": f"{code} not in V28 corpus"})
+            continue
+        if r["v28_pays"]:
+            status = "VALID"
+        elif r["v24_pays"]:
+            status = "REJECTED"
+        else:
+            status = "NOT_MAPPED"
+        results.append({
+            "code": r["icd10_code"], "description": r["description"],
+            "status": status, "v28_hcc": r["v28_hcc"], "v24_hcc": r["v24_hcc"],
+            "v28_pays": bool(r["v28_pays"]), "payment_tier": r["payment_tier"],
+            "hcc_label": r["hcc_label"],
+            "upgrade_suggestions": upgrades_by_prefix.get(code[:3], []) if status == "REJECTED" else [],
+            "v28_change_note": r.get("v28_change_note"),
+            "clinical_rationale": r.get("clinical_rationale"),
+        })
+    return results
 
 def build_v28_chat_context(icd_codes: list, max_codes: int = 5) -> str:
     """Rich V28 injection for AI chat — includes upgrade paths, change notes, tier.
@@ -1092,6 +1152,7 @@ def portal_docs():
     return render_template("docs.html", api_keys=[dict(k) for k in keys], tiers=TIERS)
 
 @app.route("/portal/key/create", methods=["POST"])
+@login_required
 def create_key():
     name = request.form.get("name","").strip() or "New Customer"
     tier = request.form.get("tier","demo")
@@ -1106,6 +1167,7 @@ def create_key():
         "usage":"X-API-Key: "+raw})
 
 @app.route("/portal/chat", methods=["POST"])
+@login_required
 def portal_chat_post():
     data = request.get_json() or {}
     q    = data.get("query","").strip()
@@ -1129,6 +1191,7 @@ def portal_chat_post():
     return jsonify({"answer":ans,"sources":[{"id":d["source_id"],"title":d["title"]} for d in docs[:5]]})
 
 @app.route("/portal/v28/lookup", methods=["POST"])
+@login_required
 def portal_v28_post():
     data = request.get_json() or {}
     code = data.get("code","").strip()
@@ -1136,12 +1199,13 @@ def portal_v28_post():
     return jsonify(v28_lookup(code))
 
 @app.route("/portal/v28/batch", methods=["POST"])
+@login_required
 def portal_v28_batch():
     data  = request.get_json() or {}
     raw   = data.get("codes","")
     codes = [c.strip().upper() for c in re.split(r"[\n,\s]+", raw if isinstance(raw,str) else "\n".join(raw)) if c.strip()]
     if not codes: return jsonify({"error":"No codes provided"}), 400
-    results  = [v28_lookup(c) for c in codes[:200]]
+    results  = v28_lookup_batch(codes[:200])
     valid    = [r for r in results if r["status"]=="VALID"]
     rejected = [r for r in results if r["status"]=="REJECTED"]
     return jsonify({"total":len(codes),"valid":len(valid),"rejected":len(rejected),
@@ -1158,6 +1222,7 @@ def portal_radv():
     return render_template("radv.html")
 
 @app.route("/portal/v28/simulate-raf", methods=["POST"])
+@login_required
 def portal_raf_post():
     """RAF simulation endpoint for portal UI — no API key required."""
     try:
@@ -1166,7 +1231,10 @@ def portal_raf_post():
         return jsonify({"error": "V28 categories module not available. Run build_seed_db.py first."}), 503
 
     data        = request.get_json() or {}
-    age         = int(data.get("age", 70))
+    try:
+        age = int(data.get("age", 70))
+    except (ValueError, TypeError):
+        return jsonify({"error": "age must be an integer"}), 400
     sex         = data.get("sex", "F").upper()
     plan        = data.get("plan_type", "non_pace")
     hcc_numbers = list(data.get("hcc_numbers", []))
@@ -1237,6 +1305,7 @@ def portal_raf_post():
 
 
 @app.route("/portal/v28/radv-requirements", methods=["POST"])
+@login_required
 def portal_radv_post():
     """RADV documentation requirements for portal — accepts HCC number or ICD-10 code."""
     try:
@@ -1310,6 +1379,7 @@ def portal_radv_post():
 
 
 @app.route("/portal/v28/explain", methods=["POST"])
+@login_required
 def portal_v28_explain():
     data = request.get_json() or {}
     code = data.get("code","").strip().upper()
@@ -1334,6 +1404,7 @@ Explain: (1) What changed between V24 and V28, (2) revenue impact per member ann
     return jsonify({**lookup, "explanation": explanation})
 
 @app.route("/portal/appeals/generate", methods=["POST"])
+@login_required
 def portal_appeals_post():
     data   = request.get_json() or {}
     cpt    = data.get("cpt_code","")
@@ -1365,6 +1436,7 @@ def portal_member():
 
 
 @app.route("/portal/member/risk-profile", methods=["POST"])
+@login_required
 def portal_member_risk_profile():
     """Combined: V28 batch audit + RAF simulation + RADV analysis in one request."""
     try:
@@ -1374,27 +1446,32 @@ def portal_member_risk_profile():
 
     data      = request.get_json() or {}
     icd_codes = data.get("icd10_codes", [])
-    age       = int(data.get("age", 70))
+    try:
+        age = int(data.get("age", 70))
+    except (ValueError, TypeError):
+        return jsonify({"error": "age must be an integer"}), 400
     sex       = data.get("sex", "F").upper()
     plan      = data.get("plan_type", "non_pace")
 
     if not icd_codes:
         return jsonify({"error": "icd10_codes required"}), 400
 
-    # 1. V28 batch audit
-    results  = [v28_lookup(c) for c in icd_codes[:50]]
+    # 1. V28 batch audit (single DB round-trip)
+    results  = v28_lookup_batch(icd_codes[:50])
     valid    = [r for r in results if r["status"] == "VALID"]
     rejected = [r for r in results if r["status"] == "REJECTED"]
 
-    # 2. Resolve valid ICD-10 codes → HCC numbers
+    # 2. Resolve valid ICD-10 codes → HCC numbers (single IN query)
+    codes_upper = [c.upper().strip() for c in icd_codes[:50]]
+    placeholders = ",".join("?" * len(codes_upper))
     db = get_db()
+    hcc_rows = db.execute(
+        f"SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code IN ({placeholders}) AND v28_pays=1",
+        codes_upper
+    ).fetchall()
     hcc_numbers = []
-    for code in icd_codes[:50]:
-        row = db.execute(
-            "SELECT v28_hcc FROM v28_hcc_codes WHERE icd10_code=? AND v28_pays=1",
-            (code.upper().strip(),)
-        ).fetchone()
-        if row and row["v28_hcc"]:
+    for row in hcc_rows:
+        if row["v28_hcc"]:
             try:
                 hcc_numbers.append(int(row["v28_hcc"]))
             except ValueError:
@@ -1476,6 +1553,8 @@ def login_page():
                 session["user_name"] = row["name"]
                 session["user_email"] = row["email"]
                 next_url = request.args.get("next", "/dashboard")
+                if not next_url.startswith("/") or next_url.startswith("//"):
+                    next_url = "/dashboard"
                 return redirect(next_url)
             error = "Invalid email or password."
         except Exception as e:

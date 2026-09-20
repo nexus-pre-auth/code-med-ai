@@ -174,17 +174,53 @@ export default function ChatShell({ userEmail, initialSubscription }: Props) {
           return
         }
 
-        const data: { text: string; isAppealLetter: boolean } = await res.json()
-
-        const assistantMsg: Message = {
-          role: 'assistant',
-          content: data.text,
-          timestamp: new Date().toISOString(),
-          isAppealLetter: data.isAppealLetter,
+        if (!res.ok || !res.body) {
+          throw new Error(`HTTP ${res.status}`)
         }
 
-        const finalMessages = [...newMessages, assistantMsg]
-        setMessages(finalMessages)
+        // Insert placeholder bubble and stop spinner so streaming text is visible
+        const placeholder: Message = {
+          role: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString(),
+        }
+        setMessages((prev) => [...prev, placeholder])
+        setLoading(false)
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let accumulated = ''
+        let isAppealLetter = false
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          const sentinelIdx = chunk.indexOf('\n{"__done"')
+
+          if (sentinelIdx !== -1) {
+            accumulated += chunk.slice(0, sentinelIdx)
+            try {
+              const sentinel = JSON.parse(chunk.slice(sentinelIdx + 1))
+              isAppealLetter = sentinel.isAppealLetter ?? false
+            } catch { /* ignore parse errors */ }
+          } else {
+            accumulated += chunk
+          }
+
+          const currentText = accumulated
+          const currentIsAppeal = isAppealLetter
+          setMessages((prev) => {
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: currentText,
+              isAppealLetter: currentIsAppeal,
+            }
+            return updated
+          })
+        }
 
         // Show CTA once after 4th exchange
         if (nextUserCount >= 4 && !ctaShown) {

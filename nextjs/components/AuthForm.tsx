@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
-type Mode = 'signin' | 'signup'
+type Mode = 'signin' | 'signup' | 'reset'
 
 export default function AuthForm() {
   const router = useRouter()
@@ -16,6 +16,12 @@ export default function AuthForm() {
   const [success, setSuccess] = useState('')
 
   const supabase = createClient()
+
+  function switchMode(m: Mode) {
+    setMode(m)
+    setError('')
+    setSuccess('')
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -29,15 +35,22 @@ export default function AuthForm() {
         password,
         options: { emailRedirectTo: `${window.location.origin}/chat` },
       })
-
       if (error) {
         setError(error.message)
       } else {
         setSuccess('Check your email for a confirmation link to activate your account.')
       }
+    } else if (mode === 'reset') {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      })
+      if (error) {
+        setError(error.message)
+      } else {
+        setSuccess('If that email is registered, you will receive a password reset link shortly.')
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-
       if (error) {
         setError(error.message)
       } else {
@@ -78,39 +91,54 @@ export default function AuthForm() {
           </div>
         </div>
 
-        {/* Mode toggle */}
-        <div
-          style={{
-            display: 'flex',
-            background: 'var(--surface)',
-            borderRadius: 10,
-            padding: 4,
-            marginBottom: 28,
-            border: '1px solid var(--border)',
-          }}
-        >
-          {(['signin', 'signup'] as Mode[]).map((m) => (
+        {/* Mode toggle (signin / signup only — reset is a sub-state of signin) */}
+        {mode !== 'reset' && (
+          <div
+            style={{
+              display: 'flex',
+              background: 'var(--surface)',
+              borderRadius: 10,
+              padding: 4,
+              marginBottom: 28,
+              border: '1px solid var(--border)',
+            }}
+          >
+            {(['signin', 'signup'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => switchMode(m)}
+                style={{
+                  flex: 1,
+                  padding: '8px 16px',
+                  borderRadius: 7,
+                  border: 'none',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  background: mode === m ? 'var(--card)' : 'transparent',
+                  color: mode === m ? 'var(--white)' : 'var(--gray)',
+                }}
+              >
+                {m === 'signin' ? 'Sign In' : 'Sign Up'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {mode === 'reset' && (
+          <div style={{ marginBottom: 20 }}>
             <button
-              key={m}
-              onClick={() => { setMode(m); setError(''); setSuccess('') }}
-              style={{
-                flex: 1,
-                padding: '8px 16px',
-                borderRadius: 7,
-                border: 'none',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                background: mode === m ? 'var(--card)' : 'transparent',
-                color: mode === m ? 'var(--white)' : 'var(--gray)',
-                borderColor: mode === m ? 'var(--border)' : 'transparent',
-              }}
+              onClick={() => switchMode('signin')}
+              style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 13, cursor: 'pointer', padding: 0 }}
             >
-              {m === 'signin' ? 'Sign In' : 'Sign Up'}
+              ← Back to Sign In
             </button>
-          ))}
-        </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--white)', marginTop: 8 }}>
+              Reset Password
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
@@ -128,21 +156,35 @@ export default function AuthForm() {
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--gray-light)', marginBottom: 6, fontWeight: 500 }}>
-              Password
-            </label>
-            <input
-              className="input-dark"
-              type="password"
-              placeholder={mode === 'signup' ? 'Min 8 characters' : '••••••••'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={mode === 'signup' ? 8 : 1}
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            />
-          </div>
+          {mode !== 'reset' && (
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--gray-light)', marginBottom: 6, fontWeight: 500 }}>
+                Password
+              </label>
+              <input
+                className="input-dark"
+                type="password"
+                placeholder={mode === 'signup' ? 'Min 8 characters' : '••••••••'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={mode === 'signup' ? 8 : 1}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              />
+            </div>
+          )}
+
+          {mode === 'signin' && (
+            <div style={{ textAlign: 'right', marginTop: -8 }}>
+              <button
+                type="button"
+                onClick={() => switchMode('reset')}
+                style={{ background: 'none', border: 'none', color: 'var(--gray)', fontSize: 12, cursor: 'pointer', padding: 0 }}
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
 
           {error && (
             <p style={{ color: 'var(--red)', fontSize: 13, padding: '10px 14px', background: 'rgba(252,90,90,0.08)', borderRadius: 8, border: '1px solid rgba(252,90,90,0.2)' }}>
@@ -166,6 +208,8 @@ export default function AuthForm() {
               ? 'Please wait...'
               : mode === 'signup'
               ? 'Create Account'
+              : mode === 'reset'
+              ? 'Send Reset Link'
               : 'Sign In'}
           </button>
         </form>
